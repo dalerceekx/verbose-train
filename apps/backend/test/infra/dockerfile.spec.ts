@@ -103,6 +103,20 @@ describe('production Dockerfile', () => {
     expect(excluding).toEqual([]);
   });
 
+  it('creates the uploads volume mount point for the runtime user only', () => {
+    const user = of(runner, 'USER').at(-1)!.args;
+    const runs = of(runner, 'RUN')
+      .map((i) => i.args)
+      .join('\n');
+    expect(runs).toContain('mkdir -p /data/uploads');
+    expect(runs).toContain(`chown ${user} /data/uploads`);
+    expect(runs).toContain('chmod 700 /data/uploads');
+    // deploy/aws mounts the persistent volume exactly there.
+    expect(read(join(REPO, 'deploy/aws/compose.yaml'))).toContain(
+      '- uploads_data:/data/uploads',
+    );
+  });
+
   it('removes package managers, has HEALTHCHECK, STOPSIGNAL and no baked secrets', () => {
     const runs = of(runner, 'RUN')
       .map((i) => i.args)

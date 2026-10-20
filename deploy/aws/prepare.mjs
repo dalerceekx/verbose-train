@@ -19,6 +19,7 @@ export function rawEnv(values) {
 
 export function prepare({
   domain,
+  storage = 'local',
   region = '',
   bucket = '',
   out,
@@ -32,6 +33,11 @@ export function prepare({
   ) {
     throw new Error('--domain: enter a domain without https:// or a path');
   }
+  // Uploads live in a private volume on the server unless S3 is chosen.
+  if (!['local', 's3'].includes(storage))
+    throw new Error('--storage: local or s3');
+  if (storage === 'local' && (region || bucket))
+    throw new Error('--region/--bucket require --storage s3');
   if (region && !/^[a-z]{2}(?:-[a-z]+)+-\d$/.test(region))
     throw new Error('Invalid --region');
   if (bucket && !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket))
@@ -96,12 +102,20 @@ export function prepare({
     OTP_MAX_REQUESTS_PER_HOUR: '5',
     SMS_DAILY_LIMIT_PER_PHONE: '10',
     SMS_DAILY_LIMIT_PER_IP: '50',
-    STORAGE_DRIVER: 's3',
-    S3_REGION: region,
-    S3_BUCKET: bucket,
-    S3_ACCESS_KEY_ID: '',
-    S3_SECRET_ACCESS_KEY: '',
-    S3_FORCE_PATH_STYLE: 'false',
+    ...(storage === 's3'
+      ? {
+          STORAGE_DRIVER: 's3',
+          S3_REGION: region,
+          S3_BUCKET: bucket,
+          S3_ACCESS_KEY_ID: '',
+          S3_SECRET_ACCESS_KEY: '',
+          S3_FORCE_PATH_STYLE: 'false',
+        }
+      : {
+          STORAGE_DRIVER: 'local',
+          // Mount point of the uploads volume (compose.yaml, API Dockerfile).
+          UPLOAD_LOCAL_DIR: '/data/uploads',
+        }),
     DEMO_ACCOUNTS_ENABLED: 'false',
     AWS_EC2_METADATA_V1_DISABLED: 'true',
   };
@@ -136,9 +150,11 @@ export function prepare({
     writeFileSync(join(dir, name), data, { mode: 0o600, flag: 'wx' });
   return {
     dir,
-    missing: ['ESKIZ_EMAIL', 'ESKIZ_PASSWORD', 'S3_REGION', 'S3_BUCKET'].filter(
-      (key) => !api[key],
-    ),
+    missing: [
+      'ESKIZ_EMAIL',
+      'ESKIZ_PASSWORD',
+      ...(storage === 's3' ? ['S3_REGION', 'S3_BUCKET'] : []),
+    ].filter((key) => !api[key]),
   };
 }
 
@@ -150,6 +166,7 @@ if (
     const { values } = parseArgs({
       options: {
         domain: { type: 'string' },
+        storage: { type: 'string' },
         region: { type: 'string' },
         bucket: { type: 'string' },
         out: { type: 'string' },

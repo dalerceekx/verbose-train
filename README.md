@@ -58,8 +58,9 @@ Bitta Ubuntu 24.04 EC2/Lightsail serveri uchun frontend, API, PostgreSQL,
 Redis va avtomatik HTTPS konfiguratsiyasi tayyor:
 [AWS deploy yo‘riqnomasi](deploy/aws/README.md).
 Production fayllari `.deploy/aws/` da alohida saqlanadi; development `.env`
-serverga ko‘chirilmaydi. Release oldidan private S3 bucket/region va IAM
-ruxsatlarini sozlash, Eskiz sender/shablonini tekshirish kerak.
+serverga ko‘chirilmaydi. v1’da yuklangan fayllar serverdagi private volume’da
+saqlanadi (S3 — v2’da). Release oldidan DNS’ni server IP’siga yo‘naltirish va
+Eskiz sender/shablonini tekshirish kerak.
 
 ## Muammolar va yechimlar
 

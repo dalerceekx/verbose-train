@@ -33,8 +33,6 @@ test('new production secrets, least-privilege URLs and file permissions; no dev 
     const out = join(dir, 'config');
     const opts = {
       domain: 'riizq.uz',
-      region: 'eu-central-1',
-      bucket: 'private-test-bucket',
       out,
       eskizEnv: source,
       tag: 'test',
@@ -47,7 +45,15 @@ test('new production secrets, least-privilege URLs and file permissions; no dev 
     assert.equal(api.DEMO_PASSWORD, undefined);
     assert.equal(api.OTP_PEPPER, undefined);
     assert.equal(api.MIGRATION_DATABASE_URL, undefined);
-    assert.equal(api.S3_ACCESS_KEY_ID, '');
+    assert.equal(api.S3_ACCESS_KEY_ID, undefined);
+    // Default storage: the private uploads volume that compose.yaml mounts.
+    assert.equal(api.STORAGE_DRIVER, 'local');
+    assert.equal(api.S3_BUCKET, undefined);
+    const compose = readFileSync(
+      new URL('./compose.yaml', import.meta.url),
+      'utf8',
+    );
+    assert.ok(compose.includes(`- uploads_data:${api.UPLOAD_LOCAL_DIR}\n`));
     assert.equal(new URL(api.DATABASE_URL).username, 'meningfermam_app');
     assert.equal(new URL(api.DATABASE_URL).password, pg.APP_DB_PASSWORD);
     assert.equal(
@@ -82,6 +88,33 @@ test('new production secrets, least-privilege URLs and file permissions; no dev 
   }
 });
 
+test('S3 storage is opt-in: bucket settings, IAM role by default, missing fields reported', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'riizq-prepare-test-'));
+  try {
+    const opts = { domain: 'riizq.uz', storage: 's3', tag: 'test' };
+    prepare({
+      ...opts,
+      region: 'eu-central-1',
+      bucket: 'private-test-bucket',
+      out: join(dir, 'complete'),
+    });
+    const api = read(join(dir, 'complete/api.env'));
+    assert.equal(api.STORAGE_DRIVER, 's3');
+    assert.equal(api.S3_REGION, 'eu-central-1');
+    assert.equal(api.S3_BUCKET, 'private-test-bucket');
+    assert.equal(api.S3_ACCESS_KEY_ID, '');
+    assert.equal(api.UPLOAD_LOCAL_DIR, undefined);
+    assert.deepEqual(prepare({ ...opts, out: join(dir, 'partial') }).missing, [
+      'ESKIZ_EMAIL',
+      'ESKIZ_PASSWORD',
+      'S3_REGION',
+      'S3_BUCKET',
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('raw environment prevents multiline injection without changing secret characters', () => {
   assert.equal(rawEnv({ TOKEN: 'a$#"\'b=' }), 'TOKEN=a$#"\'b=\n');
   for (const value of ['a\nNODE_ENV=test', 'a\rb', 'a\0b']) {
@@ -101,4 +134,11 @@ test('refuses unsafe domains and image tags before creating files', () => {
     assert.throws(() => prepare({ domain }));
   }
   assert.throws(() => prepare({ domain: 'riizq.uz', tag: 'bad\nTAG=x' }));
+  assert.throws(() => prepare({ domain: 'riizq.uz', storage: 'gcs' }), {
+    message: '--storage: local or s3',
+  });
+  // A bucket without --storage s3 would be silently ignored.
+  assert.throws(() => prepare({ domain: 'riizq.uz', bucket: 'private-x' }), {
+    message: '--region/--bucket require --storage s3',
+  });
 });

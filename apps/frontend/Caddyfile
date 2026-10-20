@@ -4,6 +4,11 @@
 	skip_install_trust
 }
 
+# www → apex (DNS may point www here as well; it gets its own certificate).
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
+
 # Not published by Compose; probes don't depend on a public TLS certificate.
 http://:8080 {
 	bind 127.0.0.1

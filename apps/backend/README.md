@@ -277,7 +277,7 @@ To‘liq ro‘yxat, dev qiymatlar va secret yaratish buyruqlari —
 | Cookie | `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_DOMAIN`, `AUTH_COOKIE_SAMESITE` | production’da Secure majburiy |
 | Parol / OTP / MFA | `PASSWORD_SCRYPT_COST`, `OTP_PEPPER`, `OTP_TTL_SECONDS`, `OTP_MAX_ATTEMPTS`, `OTP_RESEND_COOLDOWN_SECONDS`, `OTP_MAX_SENDS`, `DATA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEYS_PREVIOUS`, `MFA_ISSUER` | |
 | SMS | `SMS_PROVIDER`, `SMS_API_URL`, `SMS_API_KEY`, `SMS_SENDER`, `SMS_ALLOWED_HOSTS`, `SMS_WEBHOOK_SECRET`, `SMS_DAILY_LIMIT_PER_PHONE`, `SMS_DAILY_LIMIT_PER_IP`, `SMS_MAX_SEND_ATTEMPTS` | production’da `mock` taqiqlangan |
-| Storage | `STORAGE_DRIVER`, `S3_*`, `UPLOAD_LOCAL_DIR`, `UPLOAD_MAX_FILE_BYTES`, `UPLOAD_MAX_FILES_PER_USER`, `UPLOAD_USER_QUOTA_BYTES`, `UPLOAD_STRIP_METADATA` | production’da faqat `s3` |
+| Storage | `STORAGE_DRIVER`, `S3_*`, `UPLOAD_LOCAL_DIR`, `UPLOAD_MAX_FILE_BYTES`, `UPLOAD_MAX_FILES_PER_USER`, `UPLOAD_USER_QUOTA_BYTES`, `UPLOAD_STRIP_METADATA` | production’da `s3` yoki `local` (bitta serverli deploy: private volume, absolute `UPLOAD_LOCAL_DIR`); `S3_BUCKET` faqat `s3` uchun majburiy |
 | Idempotency | `IDEMPOTENCY_TTL_SECONDS` | |
 | Demo (dev/test) | `DEMO_ACCOUNTS_ENABLED`, `DEMO_PASSWORD`, `DEMO_SUPER_ADMIN_{PHONE,EMAIL,PASSWORD}`, `DEMO_FARMER_{PHONE,EMAIL,PASSWORD}` | production’da rad etiladi |
 | Telemetriya | `OBSERVE_APP_KEY`, `OBSERVE_APP_SECRET` | ikkalasi bo‘lsa yoqiladi |

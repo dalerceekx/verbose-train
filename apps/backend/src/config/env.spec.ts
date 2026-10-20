@@ -106,3 +106,38 @@ describe('Eskiz and OTP environment validation', () => {
     );
   });
 });
+
+describe('file storage environment validation', () => {
+  it('accepts local storage in production without any S3 settings', () => {
+    const env = validateEnv({
+      ...production,
+      S3_BUCKET: undefined,
+      STORAGE_DRIVER: 'local',
+      UPLOAD_LOCAL_DIR: '/data/uploads',
+    });
+    expect(env).toMatchObject({
+      STORAGE_DRIVER: 'local',
+      UPLOAD_LOCAL_DIR: '/data/uploads',
+    });
+    expect(env.S3_BUCKET).toBeUndefined();
+  });
+
+  it('requires a bucket for S3 storage', () => {
+    expect(() => validateEnv({ ...production, S3_BUCKET: undefined })).toThrow(
+      /S3_BUCKET/,
+    );
+  });
+
+  it.each([undefined, 'data/uploads'])(
+    'rejects local storage without an absolute UPLOAD_LOCAL_DIR (%s)',
+    (dir) => {
+      expect(() =>
+        validateEnv({
+          ...production,
+          STORAGE_DRIVER: 'local',
+          UPLOAD_LOCAL_DIR: dir,
+        }),
+      ).toThrow(/UPLOAD_LOCAL_DIR/);
+    },
+  );
+});

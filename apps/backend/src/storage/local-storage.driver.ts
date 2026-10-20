@@ -16,9 +16,10 @@ function isInside(base: string, candidate: string): boolean {
 }
 
 /**
- * Filesystem storage for development and tests only (env validation forbids
- * it in production). The base directory must be absolute and outside the
- * project directory, so uploads can never be served or executed as code.
+ * Filesystem storage for development, tests and the single-server deploy
+ * (deploy/aws: a private volume mounted only into the API container). The base
+ * directory must be absolute and outside the project directory, so uploads
+ * can never be served or executed as code.
  */
 export class LocalStorageDriver implements StorageDriver {
   readonly kind = 'local' as const;

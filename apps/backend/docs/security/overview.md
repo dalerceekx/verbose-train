@@ -77,7 +77,9 @@ yaratadigan UUID kalit (`buildStorageKey`), original nom faqat ko‘rsatish uchu
 tozalanadi; local driver yo‘lni base papkadan chiqib ketmasligini va symlink’ni
 tekshiradi; hajm (`UPLOAD_MAX_FILE_BYTES` → 413), soni va per-user kvota;
 upload papkasi loyiha papkasidan tashqarida bo‘lishi startup’da tekshiriladi;
-production’da faqat `s3` (private bucket, MinIO dev’da `anonymous none`);
+production’da `s3` (private bucket, MinIO dev’da `anonymous none`) yoki
+bitta serverli deploy’da `local` (faqat API konteyneriga ulangan private
+volume, papkalar `0700`, fayllar `0600`);
 olish — ownership tekshiradigan endpoint yoki qisqa muddatli signed URL;
 `MalwareScanner` interfeysi; EXIF/metadata tozalash.
 Joy: `src/storage/`, `src/files/`.

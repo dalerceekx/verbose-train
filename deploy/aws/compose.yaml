@@ -55,6 +55,9 @@ services:
         format: raw
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN}
+    # STORAGE_DRIVER=local: uploaded files persist here (S3 comes later).
+    volumes:
+      - uploads_data:/data/uploads
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -123,5 +126,6 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:
   caddy_data:
   caddy_config:

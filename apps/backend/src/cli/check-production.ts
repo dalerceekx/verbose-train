@@ -3,6 +3,10 @@ import { validateEnv } from '../config/env.js';
 /** Offline validation only: never starts Nest, connects to AWS or sends SMS. */
 const failures = new Set<string>();
 const raw = process.env;
+// deploy/aws/compose.yaml mounts the persistent uploads volume here.
+const UPLOADS_VOLUME = '/data/uploads';
+// Empty counts as unset, as in validateEnv (default: s3).
+const s3 = (raw.STORAGE_DRIVER || 's3') === 's3';
 try {
   const env = validateEnv(raw);
   if (env.NODE_ENV !== 'production') failures.add('NODE_ENV');
@@ -11,11 +15,16 @@ try {
     failures.add('CORS_ORIGINS / SITE_DOMAIN');
   if (env.AUTH_COOKIE_DOMAIN) failures.add('AUTH_COOKIE_DOMAIN');
   if (env.SWAGGER_ENABLED) failures.add('SWAGGER_ENABLED');
-  if (env.S3_ENDPOINT) failures.add('S3_ENDPOINT (AWS: unset)');
-  if (env.S3_FORCE_PATH_STYLE) failures.add('S3_FORCE_PATH_STYLE');
-  if (!raw.S3_REGION) failures.add('S3_REGION');
-  if (Boolean(env.S3_ACCESS_KEY_ID) !== Boolean(env.S3_SECRET_ACCESS_KEY))
-    failures.add('S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY');
+  if (s3) {
+    if (env.S3_ENDPOINT) failures.add('S3_ENDPOINT (AWS: unset)');
+    if (env.S3_FORCE_PATH_STYLE) failures.add('S3_FORCE_PATH_STYLE');
+    if (!raw.S3_REGION) failures.add('S3_REGION');
+    if (Boolean(env.S3_ACCESS_KEY_ID) !== Boolean(env.S3_SECRET_ACCESS_KEY))
+      failures.add('S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY');
+  } else if (env.UPLOAD_LOCAL_DIR !== UPLOADS_VOLUME) {
+    // Anywhere else the files would vanish with the container.
+    failures.add(`UPLOAD_LOCAL_DIR (${UPLOADS_VOLUME})`);
+  }
   if (env.SMS_PROVIDER !== 'eskiz') failures.add('SMS_PROVIDER');
   const db = new URL(env.DATABASE_URL);
   if (
@@ -36,7 +45,11 @@ try {
   // Zod/errors may contain user-supplied text. Never print raw environment.
   failures.add('api.env schema (required fields, secrets, production flags)');
 }
-for (const key of ['S3_BUCKET', 'S3_REGION', 'ESKIZ_EMAIL', 'ESKIZ_PASSWORD']) {
+for (const key of [
+  ...(s3 ? ['S3_BUCKET', 'S3_REGION'] : []),
+  'ESKIZ_EMAIL',
+  'ESKIZ_PASSWORD',
+]) {
   if (!raw[key] || /^(CHANGE|REPLACE|TODO|your[-_])/i.test(raw[key] ?? ''))
     failures.add(key);
 }

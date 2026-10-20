@@ -18,10 +18,9 @@ writeFileSync(
   `ESKIZ_EMAIL=smoke@example.test\nESKIZ_PASSWORD='${fakePassword}'\n`,
   { mode: 0o600 },
 );
+// Default storage (local uploads volume), exactly as a fresh deploy gets it.
 prepare({
   domain: 'smoke.riizq.test',
-  region: 'us-east-1',
-  bucket: 'private-smoke',
   out: config,
   eskizEnv: join(scratch, 'eskiz.env'),
   tag: 'aws-prep',
@@ -49,37 +48,9 @@ writeFileSync(
   `services:
   api:
     environment:
-      S3_ENDPOINT: http://minio:9000
-      S3_FORCE_PATH_STYLE: 'true'
-      S3_ACCESS_KEY_ID: smoke-access-key
-      S3_SECRET_ACCESS_KEY: smoke-secret-key-123456
       CORS_ORIGINS: https://localhost
-    depends_on:
-      minio-init: {condition: service_completed_successfully}
   web:
     environment: {SITE_DOMAIN: localhost}
-  minio:
-    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
-    command: [server, /data]
-    environment:
-      MINIO_ROOT_USER: smoke-access-key
-      MINIO_ROOT_PASSWORD: smoke-secret-key-123456
-    networks: [data]
-  minio-init:
-    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
-    entrypoint: [sh, -ec]
-    command:
-      - |
-        for i in $$(seq 1 30); do
-          if mc alias set local http://minio:9000 smoke-access-key smoke-secret-key-123456 >/dev/null 2>&1; then
-            mc mb --ignore-existing local/private-smoke
-            exit 0
-          fi
-          sleep 1
-        done
-        exit 1
-    depends_on: [minio]
-    networks: [data]
 `,
 );
 
@@ -118,16 +89,7 @@ try {
     `if(process.env.ESKIZ_PASSWORD !== ${JSON.stringify(fakePassword)}) process.exit(1); if(process.env.MIGRATION_DATABASE_URL) process.exit(2)`,
   ]);
   console.log('PASS production preflight and secret transport');
-  compose(
-    'up',
-    '-d',
-    '--wait',
-    '--wait-timeout',
-    '120',
-    'postgres',
-    'redis',
-    'minio',
-  );
+  compose('up', '-d', '--wait', '--wait-timeout', '120', 'postgres', 'redis');
   compose('run', '--rm', 'migrate');
   // Repeated migrations and reference seed must be safe on the same volume.
   compose('run', '--rm', 'migrate');
@@ -304,6 +266,14 @@ try {
   const redirect = curl('-I', `http://localhost:${httpPort}/login`);
   assert.match(redirect, /308/);
   assert.match(redirect, /location: https:\/\/localhost\/login/i);
+  const www = request(
+    '-I',
+    '--resolve',
+    `www.localhost:${port}:127.0.0.1`,
+    `https://www.localhost:${port}/login`,
+  );
+  assert.match(www, /^HTTP\/\S+ 301/m);
+  assert.match(www, /location: https:\/\/localhost\/login/i);
   for (const service of ['api', 'postgres', 'redis']) {
     const id = compose('ps', '-q', service).trim();
     const bindings = JSON.parse(
@@ -317,7 +287,60 @@ try {
     assert.ok(!bindings || Object.keys(bindings).length === 0);
   }
   console.log(
-    'PASS trusted TLS, HTTP redirect, SPA routes, same-origin API, all dependency health, private ports',
+    'PASS trusted TLS, HTTP and www redirects, SPA routes, same-origin API, all dependency health, private ports',
+  );
+  // STORAGE_DRIVER=local: the uploads volume belongs to the API user, survives
+  // re-creating the container and streams into the backup's tar.
+  assert.equal(
+    compose(
+      'exec',
+      '-T',
+      'api',
+      'stat',
+      '-c',
+      '%u:%g %a',
+      '/data/uploads',
+    ).trim(),
+    '10001:10001 700',
+  );
+  compose(
+    'exec',
+    '-T',
+    'api',
+    'node',
+    '-e',
+    "require('node:fs').writeFileSync('/data/uploads/smoke-persist', 'ok')",
+  );
+  compose(
+    'up',
+    '-d',
+    '--wait',
+    '--wait-timeout',
+    '180',
+    '--force-recreate',
+    'api',
+  );
+  const uploads = run(
+    'docker',
+    [
+      ...base,
+      '-f',
+      override,
+      'exec',
+      '-T',
+      'api',
+      'tar',
+      '-C',
+      '/data/uploads',
+      '-cf',
+      '-',
+      '.',
+    ],
+    { encoding: null },
+  );
+  assert.ok(uploads.includes('smoke-persist'));
+  console.log(
+    'PASS uploads volume: owner, persistence across re-creation, backup stream',
   );
 } finally {
   try {

@@ -1,7 +1,8 @@
 # riizq.uz — AWS Ubuntu + Docker
 
 Bu paket bitta EC2 yoki Lightsail Ubuntu **24.04 LTS** serveri uchun:
-React/Caddy → NestJS → PostgreSQL + Redis; fayllar private AWS S3’da.
+React/Caddy → NestJS → PostgreSQL + Redis; yuklangan fayllar serverdagi private
+volume’da (v1). S3 keyingi versiyada ulanadi — [2-bo‘lim](#2-fayllar-v1--server-diskida-v2--s3).
 Foydalanuvchi aytgan `24.02 LTS` versiyasini serverda `cat /etc/os-release`
 bilan tekshiring. Buyruqlar 24.04 uchun yozilgan.
 
@@ -23,7 +24,8 @@ RDS/ElastiCache varianti kerak bo‘lsa, mavjud
   bilan yaratiladi; fayllar `0600`, katalog `0700`.
 - Development `.env` o‘zgartirilmaydi. Undan faqat Eskiz email/parol/sender/shabloni
   explicit allowlist orqali ko‘chirilishi mumkin.
-- S3 hali yaratilmagan: `api.env` ichida `S3_REGION`, `S3_BUCKET` to‘ldiriladi.
+- Fayllar (v1): `STORAGE_DRIVER=local`, `UPLOAD_LOCAL_DIR=/data/uploads` —
+  `uploads_data` volume. S3 bucket, IAM va AWS credential kerak emas.
 - Haqiqiy AWS deploy, Eskiz yuborish va public DNS/TLS tekshiruvi lokal testga
   kirmaydi. Eskiz kabinetida sender, shablon va balansni tekshirish kerak.
 
@@ -41,8 +43,10 @@ Build mashinasi va server arxitekturasi bir xil bo‘lsin (`uname -m`), yoki
 Buildx bilan kerakli platformani tanlang.
 
 1. EC2 Elastic IP yoki Lightsail static IP biriktiring.
-2. `riizq.uz` A yozuvini shu IP’ga yo‘naltiring. Ishlamaydigan AAAA yozuvini
-   qoldirmang. Bu paket `www.riizq.uz` uchun alohida sayt sozlamaydi.
+2. `riizq.uz` A yozuvini shu IP’ga yo‘naltiring (domen NS’lari turgan DNS
+   panelida; hozir Eskiz). Ishlamaydigan AAAA yozuvini qoldirmang.
+   `www.riizq.uz` ham shu serverga qarasin (`CNAME riizq.uz`): Caddy unga
+   alohida sertifikat oladi va `https://riizq.uz` ga 301 bilan yo‘naltiradi.
 3. Security Group/Lightsail firewall: TCP 80/443 ochiq; SSH 22 faqat sizning
    IP’ingizdan. 3001, 5432, 6379, 9000 ochilmaydi.
 4. Serverda Docker’ni rasmiy repository’dan o‘rnating:
@@ -85,7 +89,17 @@ Manbalar: [Docker Ubuntu](https://docs.docker.com/engine/install/ubuntu/),
 [Compose raw env](https://docs.docker.com/reference/compose-file/services/#format),
 [Caddy Automatic HTTPS](https://caddyserver.com/docs/automatic-https).
 
-## 2. Private S3 va IAM
+## 2. Fayllar: v1 — server diskida, v2 — S3
+
+**v1 (hozir).** Yuklangan fayllar `uploads_data` Docker volume’ida saqlanadi
+(`api.env`: `STORAGE_DRIVER=local`, `UPLOAD_LOCAL_DIR=/data/uploads`). Volume
+faqat API konteyneriga ulanadi, egasi API foydalanuvchisi (UID 10001), papkalar
+`0700`, fayllar `0600`; Caddy va boshqa servislar uni ko‘rmaydi. `check-env`
+`UPLOAD_LOCAL_DIR` aynan volume ulangan yo‘l ekanini tekshiradi, `backup.sh`
+fayllarni DB bilan birga shifrlaydi (6-bo‘lim). Cheklov: fayllar bitta server
+diskida — disk monitoringi va off-server backup nusxasi majburiy.
+
+### v2: S3’ga o‘tish
 
 AWS CLI’ni [rasmiy yo‘riqnoma](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 bo‘yicha o‘rnating. Provisioning uchun AWS profilingiz bilan kiring.
@@ -113,14 +127,29 @@ API ishga tushishda bucket privacy va health’ni tekshiradi, shu sababli faqat
   faqat yuqoridagi policy’ga ega IAM foydalanuvchining access key/secret’ini
   serverdagi `api.env` ga kiriting. AWS root access key ishlatmang.
 
-`api.env` ichida:
+`api.env` ichida `STORAGE_DRIVER` qatorini almashtiring va `UPLOAD_LOCAL_DIR`
+qatorini o‘chiring:
 
 ```dotenv
+STORAGE_DRIVER=s3
 S3_REGION=YOUR_AWS_REGION
 S3_BUCKET=riizq-private-ACCOUNT_ID
 ```
 
 `S3_ENDPOINT` qo‘shmang: bu AWS, lokal MinIO emas. Bucket public bo‘lmasin.
+Mavjud fayllarni release’dan oldin bucket ildiziga ko‘chiring — kalitlar ikkala
+rejimda bir xil (`files/YYYY/MM/<uuid>.<ext>`):
+
+```bash
+install -d -m 700 ~/riizq-uploads-export
+bash deploy/aws/compose.sh ~/.config/riizq exec -T api tar -C /data/uploads -cf - . | \
+  tar -C ~/riizq-uploads-export -xf -
+aws s3 sync ~/riizq-uploads-export s3://riizq-private-ACCOUNT_ID/ --sse AES256
+```
+
+Sinxron va health tekshiruvidan keyin eksport papkasini o‘chiring; volume’ni
+birinchi muvaffaqiyatli S3 backup’gacha saqlab turing.
+
 Manbalar: [S3 policy actions](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html),
 [EC2 metadata options](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-options.html).
 
@@ -131,9 +160,12 @@ generatorni **faqat yangi katalogga** ishlating (Node 22+):
 
 ```bash
 node deploy/aws/prepare.mjs --domain riizq.uz \
-  --region YOUR_AWS_REGION --bucket riizq-private-ACCOUNT_ID \
   --eskiz-env apps/backend/.env --out .deploy/aws --tag 20261019-initial
 ```
+
+Standart rejim — v1 lokal fayl saqlash. S3 bilan (v2) yangi konfiguratsiya
+uchun `--storage s3 --region YOUR_AWS_REGION --bucket riizq-private-ACCOUNT_ID`
+qo‘shing.
 
 Manba paketini yaratish:
 
@@ -187,12 +219,14 @@ Caddy uchun A/AAAA va 80/443 ochiq bo‘lishi shart; sertifikat ma’lumotlari
 ```bash
 curl -I http://riizq.uz
 curl -I https://riizq.uz/login
+curl -I https://www.riizq.uz/login   # 301 → https://riizq.uz/login
 curl --fail https://riizq.uz/api/v1/health
 bash deploy/aws/compose.sh ~/.config/riizq ps
 ```
 
-Health javobida `database`, `redis`, `storage` uchalasi `up` bo‘lsin.
-`/api/v1/health/live` faqat process liveness; AWS/S3 ulanishini isbotlamaydi.
+Health javobida `database`, `redis`, `storage` uchalasi `up` bo‘lsin
+(`storage`: v1’da uploads volume’ga yozish mumkin, v2’da S3 ulanishi).
+`/api/v1/health/live` faqat process liveness; bog‘liqliklarni isbotlamaydi.
 Public URL’ni tashqi monitoringga ulang, disk/RAM va backup xatolari uchun
 alert qo‘ying. Loglar avtomatik rotation qilinadi.
 
@@ -227,26 +261,39 @@ age-keygen -y riizq-backup-identity.key > backup-recipients.txt
 
 Serverga faqat `backup-recipients.txt` public kaliti yuboriladi. `backup.sh`
 `meningfermam_backup` read-only roli orqali dump qiladi; plaintext dump diskka
-yozilmaydi. `pg_dump` yoki encryption xatosida muvaffaqiyat deb qaytmaydi.
+yozilmaydi. `STORAGE_DRIVER=local` bo‘lsa `uploads_data` tarkibi ham alohida
+`uploads-*.tar.age` faylga shifrlanadi. `pg_dump`, `tar` yoki encryption
+xatosida muvaffaqiyat deb qaytmaydi.
+
+v1 (S3’siz) — to‘rtinchi argument kerak emas:
 
 ```bash
 bash deploy/aws/backup.sh ~/.config/riizq ~/.config/riizq/backup-recipients.txt \
-  ~/riizq-backups s3://YOUR_BACKUP_BUCKET/postgres
+  ~/riizq-backups
 ```
 
+Server diskidagi nusxa server bilan birga yo‘qolishi mumkin. Shifrlangan
+fayllarni muntazam **o‘z kompyuteringizga** ko‘chiring (ular `age` bilan
+shifrlangan, kalitsiz o‘qib bo‘lmaydi):
+
+```bash
+rsync -a ubuntu@SERVER_IP:riizq-backups/ ~/riizq-backups/
+```
+
+v2’da S3’ga ham yuklash: oxiriga `s3://YOUR_BACKUP_BUCKET/postgres` qo‘shing.
 Backup uchun alohida private/versioned bucket yarating. Backup identifikatoriga
 faqat o‘sha prefix’da `s3:PutObject`, `s3:AbortMultipartUpload` bering; kundalik
 upload uchun delete ruxsati kerak emas. AWS CLI serverdagi credential/role’ni
 ishlatadi. API `.env` credential’lari host CLI’ga avtomatik o‘tmaydi.
 
-Cron misoli (yo‘llarni o‘z serveringizga moslang):
+Cron misoli (yo‘llarni o‘z serveringizga moslang; v2’da S3 manzilini qo‘shing):
 
 ```cron
-15 2 * * * /bin/bash /home/ubuntu/riizq/deploy/aws/backup.sh /home/ubuntu/.config/riizq /home/ubuntu/.config/riizq/backup-recipients.txt /home/ubuntu/riizq-backups s3://YOUR_BACKUP_BUCKET/postgres >> /home/ubuntu/riizq-backup.log 2>&1
+15 2 * * * /bin/bash /home/ubuntu/riizq/deploy/aws/backup.sh /home/ubuntu/.config/riizq /home/ubuntu/.config/riizq/backup-recipients.txt /home/ubuntu/riizq-backups >> /home/ubuntu/riizq-backup.log 2>&1
 ```
 
-Mahalliy nusxalar avtomatik o‘chirilmaydi; disk monitoringi va backup bucket
-lifecycle retention’ini sozlang. Backup muvaffaqiyatsiz bo‘lsa alert kerak.
+Mahalliy nusxalar avtomatik o‘chirilmaydi; disk monitoringi va retention’ni
+(v2’da bucket lifecycle) sozlang. Backup muvaffaqiyatsiz bo‘lsa alert kerak.
 `.config/riizq/api.env`, ayniqsa `DATA_ENCRYPTION_KEY` ni ham alohida shifrlangan
 backup’da saqlang: bazaning o‘zi MFA/shifrlangan SMS’ni tiklashga yetmaydi.
 
@@ -269,6 +316,14 @@ Kalitni serverda doimiy saqlamang; decrypt oqimini operator mashinasidan SSH
 orqali uzatish ham mumkin. So‘ng mos eski `api.env` encryption key bilan
 release va health tekshiruvini bajaring. ACL/grant’lar dump’dan tiklanadi.
 
+Yuklangan fayllar (v1) — release’dan keyin, API ishlab turganda:
+
+```bash
+sha256sum -c UPLOADS.tar.age.sha256
+age --decrypt -i /SAFE_PATH/riizq-backup-identity.key UPLOADS.tar.age | \
+  bash deploy/aws/compose.sh ~/.config/riizq exec -T api tar -C /data/uploads -xf -
+```
+
 ## 7. Yangilash va rollback
 
 1. Backup muvaffaqiyatini tekshiring, oldingi image taglarini yozib oling.
@@ -279,8 +334,8 @@ release va health tekshiruvini bajaring. ACL/grant’lar dump’dan tiklanadi.
    `compose.sh ... up -d --wait api web`. Bu DB migratsiyasini qaytarmaydi;
    schema eski kodga mos bo‘lmasa forward fix yoki rejalangan restore kerak.
 
-`docker compose down -v` production’da ishlatilmaydi: data va TLS volume’lari
-o‘chadi. Hamma konteynerni ommaviy prune qilish ham deploy bosqichi emas.
+`docker compose down -v` production’da ishlatilmaydi: DB, yuklangan fayllar va
+TLS volume’lari o‘chadi. Hamma konteynerni ommaviy prune qilish ham deploy bosqichi emas.
 
 ## Tekshiruvlar
 
@@ -293,5 +348,6 @@ npm run test:deploy:smoke
 
 Smoke noyob Compose project va vaqtinchalik volume’lar ishlatadi; faqat
 o‘z resurslarini o‘chiradi. Production rejimidagi API, haqiqiy Postgres/Redis,
-lokal MinIO va Caddy internal CA bilan tekshiriladi. AWS IAM, public ACME,
-haqiqiy Eskiz delivery va yuklama testining o‘rnini bosmaydi.
+uploads volume (egasi, konteyner qayta yaratilganda saqlanishi, backup oqimi)
+va Caddy internal CA (`www` redirect bilan) tekshiriladi. Public ACME, haqiqiy
+Eskiz delivery va yuklama testining o‘rnini bosmaydi.

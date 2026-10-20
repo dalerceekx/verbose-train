@@ -174,12 +174,14 @@ const envSchema = z
     SMS_MAX_SEND_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
 
     // --- File storage -------------------------------------------------------
-    // `s3` (private bucket) in production; `local` for development/tests.
+    // `s3` = private bucket; `local` = private directory on the server
+    // (development, tests and the single-server deploy until S3 is added).
     STORAGE_DRIVER: z.enum(['s3', 'local']).default('s3'),
     // Leave S3_ENDPOINT empty on AWS; set it for MinIO in development.
     S3_ENDPOINT: z.url().optional(),
     S3_REGION: z.string().default('us-east-1'),
-    S3_BUCKET: z.string().min(1),
+    // Required for STORAGE_DRIVER=s3 (checked below).
+    S3_BUCKET: z.string().min(1).optional(),
     // Optional so production can rely on the instance/task IAM role.
     S3_ACCESS_KEY_ID: z.string().optional(),
     S3_SECRET_ACCESS_KEY: z.string().optional(),
@@ -308,6 +310,9 @@ const envSchema = z
       }
     }
 
+    if (env.STORAGE_DRIVER === 's3' && !env.S3_BUCKET) {
+      fail('S3_BUCKET', 'STORAGE_DRIVER=s3 uchun majburiy');
+    }
     if (env.STORAGE_DRIVER === 'local') {
       if (!env.UPLOAD_LOCAL_DIR || !isAbsolute(env.UPLOAD_LOCAL_DIR)) {
         fail(
@@ -357,12 +362,6 @@ const envSchema = z
         fail(
           'DEMO_PASSWORD',
           'Production muhitida demo parol bo‘lmasligi kerak',
-        );
-      }
-      if (env.STORAGE_DRIVER !== 's3') {
-        fail(
-          'STORAGE_DRIVER',
-          'Production’da fayllar faqat private object storage’da (s3)',
         );
       }
       if (!env.AUTH_COOKIE_SECURE) {

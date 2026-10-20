@@ -58,17 +58,22 @@ ENV NODE_ENV=production \
 
 # Fixed numeric UID/GID (matches `user:` in compose.prod.yaml). Package
 # managers are removed: nothing is installed at runtime, and the prisma CLI
-# comes from node_modules.
+# comes from node_modules. /data/uploads is the mount point of the uploads
+# volume (STORAGE_DRIVER=local); a new named volume inherits its owner/mode.
 RUN addgroup -S -g 10001 app \
   && adduser -S -D -H -u 10001 -G app -s /sbin/nologin app \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
-    /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
+    /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-* \
+  && mkdir -p /data/uploads \
+  && chown 10001:10001 /data/uploads \
+  && chmod 700 /data/uploads
 
 WORKDIR /app/apps/backend
 
 # Files stay owned by root and read-only for the runtime user; the app writes
-# nothing to disk (uploads go to S3, logs to stdout, /tmp is a tmpfs).
+# only uploads (S3 or the /data/uploads volume); logs go to stdout, /tmp is a
+# tmpfs.
 COPY --from=prod-deps /repo/node_modules /app/node_modules
 COPY --from=prod-deps /repo/apps/backend/node_modules ./node_modules
 COPY --from=build /repo/apps/backend/dist ./dist

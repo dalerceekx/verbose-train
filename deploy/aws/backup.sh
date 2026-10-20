@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Streams a read-only PostgreSQL dump into age. No plaintext dump on disk.
+# Streams a read-only PostgreSQL dump (and, with local storage, the uploads
+# volume) into age. No plaintext copy on disk.
 set -euo pipefail
 config_dir=${1:?Usage: backup.sh CONFIG_DIR RECIPIENTS_FILE BACKUP_DIR [S3_URI]}
 recipients=${2:?age public recipients file required}
@@ -16,18 +17,33 @@ umask 077
 mkdir -p -- "$backup_dir"
 exec 9>"$backup_dir/.backup.lock"
 flock -n 9 || { echo 'Another backup is running' >&2; exit 1; }
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
 temp=$(mktemp "$backup_dir/.dump.XXXXXX")
-trap 'rm -f -- "$temp"' EXIT
+uploads_temp=$(mktemp "$backup_dir/.uploads.XXXXXX")
+trap 'rm -f -- "$temp" "$uploads_temp"' EXIT
 bash "$script_dir/compose.sh" "$config_dir" exec -T postgres sh -c '
   export PGPASSWORD="$BACKUP_DB_PASSWORD"
   exec pg_dump -h 127.0.0.1 -U meningfermam_backup -d meningfermam --format=custom
 ' | age --encrypt --recipients-file "$recipients" > "$temp"
-file="$backup_dir/meningfermam-$(date -u +%Y%m%dT%H%M%SZ)-${temp##*.}.dump.age"
+file="$backup_dir/meningfermam-$stamp-${temp##*.}.dump.age"
 mv -- "$temp" "$file"
-(cd -- "$backup_dir" && sha256sum "${file##*/}" > "${file##*/}.sha256")
-if [[ -n "$s3_uri" ]]; then
-  aws s3 cp "$file" "${s3_uri%/}/" --sse AES256 --only-show-errors
-  aws s3 cp "$file.sha256" "${s3_uri%/}/" --sse AES256 --only-show-errors
+files=("$file")
+# STORAGE_DRIVER=local: uploaded files live in the API's uploads volume.
+if grep -qx 'STORAGE_DRIVER=local' "$config_dir/api.env"; then
+  bash "$script_dir/compose.sh" "$config_dir" exec -T api \
+    tar -C /data/uploads -cf - . |
+    age --encrypt --recipients-file "$recipients" > "$uploads_temp"
+  uploads="$backup_dir/uploads-$stamp-${uploads_temp##*.}.tar.age"
+  mv -- "$uploads_temp" "$uploads"
+  files+=("$uploads")
 fi
-# Retention is explicit in the bucket policy; never delete the only local copy.
-echo "Encrypted backup: $file"
+for file in "${files[@]}"; do
+  (cd -- "$backup_dir" && sha256sum "${file##*/}" > "${file##*/}.sha256")
+  if [[ -n "$s3_uri" ]]; then
+    aws s3 cp "$file" "${s3_uri%/}/" --sse AES256 --only-show-errors
+    aws s3 cp "$file.sha256" "${s3_uri%/}/" --sse AES256 --only-show-errors
+  fi
+  # Retention is explicit (bucket policy or operator); never delete the only
+  # local copy.
+  echo "Encrypted backup: $file"
+done

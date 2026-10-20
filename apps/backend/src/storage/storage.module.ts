@@ -31,15 +31,15 @@ function createS3Client(config: ConfigService<Env, true>): S3Client {
         config: ConfigService<Env, true>,
       ): Promise<StorageDriver> => {
         if (config.get('STORAGE_DRIVER', { infer: true }) === 'local') {
-          // Env validation guarantees an absolute path (and forbids `local`
-          // in production).
+          // Env validation guarantees an absolute path.
           return new LocalStorageDriver(
             config.get('UPLOAD_LOCAL_DIR', { infer: true }) ?? '',
           );
         }
         const driver = new S3StorageDriver(
           createS3Client(config),
-          config.get('S3_BUCKET', { infer: true }),
+          // Env validation guarantees a bucket for `s3`.
+          config.get('S3_BUCKET', { infer: true }) ?? '',
         );
         const onAws = !config.get('S3_ENDPOINT', { infer: true });
         if (config.get('NODE_ENV', { infer: true }) === 'production') {
