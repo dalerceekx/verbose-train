@@ -22,6 +22,7 @@ import {
   Field,
   Input,
   Pagination,
+  queryLoadState,
   Select,
   Skeleton,
   type Column,
@@ -30,6 +31,7 @@ import { AddExpenseDialog } from './AddExpenseDialog';
 
 const PAGE_SIZE = 10;
 const MONTH_PATTERN = /^\d{4}-\d{2}$/;
+const NOT_LOADED = <span className="text-[15px] font-medium text-ink-secondary">Ma’lumot yuklanmadi</span>;
 
 /** Anchor of the panel on the dashboard (old /expenses links land here). */
 export const EXPENSES_ANCHOR = 'xarajatlar';
@@ -87,6 +89,7 @@ export function ExpensesPanel({ farm }: { farm: Farm }) {
   );
   const total = sumAmounts(purchases);
   const feedTotal = sumAmounts(purchases.filter((purchase) => purchase.movement.item.category === 'FEED'));
+  const ledgerState = queryLoadState(ledger);
 
   const columns: Column<Purchase>[] = [
     { key: 'date', header: 'Sana', cell: (purchase) => formatDate(purchase.movement.createdAt) },
@@ -129,12 +132,12 @@ export function ExpensesPanel({ farm }: { farm: Farm }) {
           Xarajatlar
         </h2>
         <Button size="sm" icon={<Plus aria-hidden className="size-4" />} onClick={() => setAdding(true)}>
-          Xarajat qo‘shish
+          Xarid qo‘shish
         </Button>
       </div>
       <p className="mt-1 text-[13px] text-ink-secondary">
-        Omborga narxi bilan kiritilgan xaridlar avtomatik qo‘shiladi. Transport, ish haqi kabi boshqa xarajatlarni kiritish
-        backend’da hali yo‘q.
+        Omborga narxi bilan kiritilgan xaridlar avtomatik qo‘shiladi. Boshlang‘ich qoldiq xarid emas — bu yerga kirmaydi.
+        Transport, ish haqi kabi xarajatlar tez orada qo‘shiladi.
       </p>
 
       <div className="mt-4 grid gap-2.5 sm:flex sm:flex-wrap sm:items-end">
@@ -168,14 +171,23 @@ export function ExpensesPanel({ farm }: { farm: Farm }) {
       </div>
 
       <section aria-label="Xarajatlar ko‘rsatkichlari" className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        {/* Not loaded (offline, error) is never shown as 0 so‘m. */}
         <MiniStat
           label="Jami"
-          value={ledger.isError ? '—' : formatMoney(total)}
-          loading={ledger.isPending}
+          value={ledgerState.failed ? NOT_LOADED : formatMoney(total)}
+          loading={ledgerState.loading}
           className="col-span-2 sm:col-span-1"
         />
-        <MiniStat label="Shundan yem" value={ledger.isError ? '—' : formatMoney(feedTotal)} loading={ledger.isPending} />
-        <MiniStat label="Yozuvlar" value={ledger.isError ? '—' : formatInteger(purchases.length)} loading={ledger.isPending} />
+        <MiniStat
+          label="Shundan yem"
+          value={ledgerState.failed ? NOT_LOADED : formatMoney(feedTotal)}
+          loading={ledgerState.loading}
+        />
+        <MiniStat
+          label="Yozuvlar"
+          value={ledgerState.failed ? NOT_LOADED : formatInteger(purchases.length)}
+          loading={ledgerState.loading}
+        />
       </section>
 
       {ledger.data?.truncated ? (

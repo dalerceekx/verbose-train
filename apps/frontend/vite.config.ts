@@ -1,8 +1,39 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { loadEnv } from 'vite';
+import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+
+/** Files of public/ the service worker keeps too (they are not part of the bundle). */
+const PUBLIC_SHELL_FILES = ['/favicon.svg', '/manifest.webmanifest'];
+
+/**
+ * Emits /sw.js with the list of this build's files (pwa/sw.template.js), so
+ * the app shell opens without internet. Build only: the dev server never
+ * registers a service worker.
+ */
+function serviceWorker(): Plugin {
+  return {
+    name: 'meningfermam-service-worker',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const built = Object.keys(bundle)
+        .filter((name) => /\.(js|css|woff2?|svg|png)$/.test(name))
+        .sort()
+        .map((name) => `/${name}`);
+      const precache = ['/index.html', ...PUBLIC_SHELL_FILES, ...built];
+      const version = createHash('sha256').update(precache.join('\n')).digest('hex').slice(0, 12);
+      const template = readFileSync(fileURLToPath(new URL('./pwa/sw.template.js', import.meta.url)), 'utf8');
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sw.js',
+        source: template.replace('__VERSION__', JSON.stringify(version)).replace('__PRECACHE__', JSON.stringify(precache)),
+      });
+    },
+  };
+}
 
 // Dev-only switches. A production bundle must never contain demo
 // credentials or the in-browser mock backend, so the build refuses to run
@@ -34,7 +65,7 @@ export default defineConfig(({ command, mode }) => {
   if (command === 'build' && mode === 'production') assertNoDevOnlyEnv(env);
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), serviceWorker()],
     resolve: {
       alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
     },

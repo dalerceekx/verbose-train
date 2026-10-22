@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, PawPrint, Pencil, TriangleAlert } from 'lucide-react';
+import { Archive, ArrowLeft, PawPrint, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { AnimalFormDialog } from '@/features/animals/components/AnimalFormDialog';
@@ -13,6 +13,7 @@ import {
 } from '@/features/animals/lib/labels';
 import { useAnimal } from '@/features/animals/model/animals.queries';
 import { useActiveFarm } from '@/features/farms/model/active-farm';
+import { TreatmentSection } from '@/features/treatments/components/TreatmentSection';
 import { formatDate, formatDateTime, formatDecimal } from '@/shared/lib/format';
 import { Alert, AsyncContent, Badge, Button, ButtonLink, Card, CardBody, CardHeader, DescriptionList } from '@/shared/ui';
 
@@ -112,10 +113,7 @@ export default function AnimalDetailsPage() {
                       <p className="mt-0.5 whitespace-pre-line">{data.notes}</p>
                     </div>
                   ) : null}
-                  <p className="flex items-center gap-2 text-[13px] text-ink-secondary">
-                    <TriangleAlert aria-hidden className="size-4" />
-                    Davolash tarixi va hujjatlar bo‘limi keyingi bosqichda qo‘shiladi.
-                  </p>
+                  <TreatmentSection animal={data} />
                 </CardBody>
                 <AnimalFormDialog
                   open={editing}

@@ -14,8 +14,8 @@ function SpeciesGroups({ farm }: { farm: Farm }) {
   return (
     <div className="flex flex-col gap-6">
       <Alert tone="info" title="Guruhlar hozircha avtomatik">
-        Backend’da qo‘lda guruh yaratish (nom, yosh toifasi, a’zolar) hali yo‘q. Quyida hayvonlar turi bo‘yicha avtomatik
-        guruhlangan — sonlar serverdan olingan aniq qiymatlar.
+        Qo‘lda guruh yaratish (nom, yosh toifasi, a’zolar) tez orada qo‘shiladi. Quyida hayvonlar turi bo‘yicha avtomatik
+        guruhlangan — sonlar fermangiz ro‘yxatidan olingan aniq qiymatlar.
       </Alert>
 
       <Card>
@@ -57,8 +57,8 @@ function SpeciesGroups({ farm }: { farm: Farm }) {
 
       <Card>
         <GapState
-          title="Qo‘lda guruh yaratish hali backend’da mavjud emas"
-          description="Masalan “Sog‘in sigirlar” yoki “Bo‘rdoqidagi buqachalar” kabi guruhlar API qo‘shilgach shu yerda yaratiladi."
+          title="Qo‘lda guruh yaratish — tez orada"
+          description="Masalan “Sog‘in sigirlar” yoki “Bo‘rdoqidagi buqachalar” kabi guruhlarni tez orada shu yerda yaratish mumkin bo‘ladi."
         />
       </Card>
     </div>

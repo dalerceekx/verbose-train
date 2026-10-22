@@ -1,10 +1,12 @@
-import { ArrowLeft, Calculator, Copy, History, PackageMinus, Pencil, Trash2, Wheat } from 'lucide-react';
+import { Archive, ArrowLeft, Calculator, Copy, History, PackageMinus, Pencil, Wheat } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { formatQuantity } from '@/features/inventory/lib/labels';
 import { errorMessage } from '@/shared/api/errors';
-import { formatDateTime, formatDecimal, formatInteger } from '@/shared/lib/format';
+import { todayInTashkent } from '@/shared/lib/dates';
+import { formatDate, formatDateTime, formatDecimal, formatInteger } from '@/shared/lib/format';
 import {
+  Alert,
   AsyncContent,
   Badge,
   Button,
@@ -18,10 +20,11 @@ import {
   toast,
 } from '@/shared/ui';
 import type { Ration } from '../api/rations.api';
+import { additionalIssueIds, coverageFromIssues, dailyStatus, issuePeriod } from '../lib/daily';
 import { FIELD_LABELS, PURPOSE_LABELS, STATE_LABELS } from '../lib/labels';
 import { rationLines } from '../lib/ration-math';
 import { useArchiveRation, useCopyRation, useRation, useRationIssues } from '../model/rations.queries';
-import { IssueRationDialog } from './IssueRationDialog';
+import { ISSUE_ACTION_LABEL, IssueRationDialog } from './IssueRationDialog';
 import { RationResultView } from './RationResultView';
 
 function IssueHistory({ ration }: { ration: Ration }) {
@@ -36,30 +39,59 @@ function IssueHistory({ ration }: { ration: Ration }) {
         <EmptyState
           icon={<History className="size-6" />}
           title="Hali sarf chiqarilmagan"
-          description="“Sarfni ombordan chiqarish” bilan haqiqatan berilgan yemni ombordan yozing."
+          description={`“${ISSUE_ACTION_LABEL}” bilan haqiqatan berilgan yemni ombordan yozing.`}
         />
       }
     >
-      {(data) => (
-        <ul aria-label="Sarf tarixi" className="divide-y divide-line">
-          {data.items.map((issue) => (
-            <li key={issue.id} className="px-5 py-3">
-              <p className="font-medium text-ink">
-                {formatDateTime(issue.createdAt)} · {formatInteger(issue.days)} kunlik · {formatInteger(issue.animalCount)} bosh
-              </p>
-              <p className="text-[13px] text-ink-secondary">
-                {issue.movements
-                  .map((movement) => {
-                    const item = itemOf(movement.itemId);
-                    return `${item?.name ?? 'Yem'}: −${item ? formatQuantity(movement.quantity, item.unit) : movement.quantity}`;
-                  })
-                  .join(' · ')}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
+      {(data) => {
+        const additional = additionalIssueIds(data.items);
+        return (
+          <ul aria-label="Sarf tarixi" className="divide-y divide-line">
+            {data.items.map((issue) => {
+              const period = issuePeriod(issue);
+              return (
+                <li key={issue.id} className="px-5 py-3">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium text-ink">
+                    {formatDateTime(issue.createdAt)} · {formatInteger(issue.days)} kunlik · {formatInteger(issue.animalCount)}{' '}
+                    bosh
+                    {additional.has(issue.id) ? <Badge tone="warning">Qo‘shimcha berish</Badge> : null}
+                  </p>
+                  <p className="text-[13px] text-ink-secondary">
+                    Kunlar:{' '}
+                    {period.from === period.to
+                      ? formatDate(period.from)
+                      : `${formatDate(period.from)} — ${formatDate(period.to)}`}
+                  </p>
+                  <p className="text-[13px] text-ink-secondary">
+                    {issue.movements
+                      .map((movement) => {
+                        const item = itemOf(movement.itemId);
+                        return `${item?.name ?? 'Yem'}: −${item ? formatQuantity(movement.quantity, item.unit) : movement.quantity}`;
+                      })
+                      .join(' · ')}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        );
+      }}
     </AsyncContent>
+  );
+}
+
+/** "Berilgan: 28.10.2026 gacha" from the whole issue history. */
+function CoverageNote({ ration }: { ration: Ration }) {
+  const issues = useRationIssues(ration.id);
+  const today = todayInTashkent();
+  const status = issues.data ? coverageFromIssues(issues.data.items, today) : dailyStatus(ration, today);
+  if (!status.given || !status.coveredUntil) {
+    return <Badge tone="warning">Bugun hali berilmagan</Badge>;
+  }
+  return (
+    <Badge tone="success">
+      {status.coveredUntil > today ? `Berildi · ${formatDate(status.coveredUntil)} gacha` : 'Bugun berildi'}
+    </Badge>
   );
 }
 
@@ -77,6 +109,7 @@ export function RationDetails({ rationId }: { rationId: string }) {
       {(data) => {
         const backTo = `/feed-calculator/types/${data.animalTypeId}`;
         const archived = data.archivedAt !== null;
+        const archivedFeeds = data.items.filter((line) => line.item.archivedAt !== null);
         return (
           <div className="flex flex-col gap-5">
             <div>
@@ -90,13 +123,19 @@ export function RationDetails({ rationId }: { rationId: string }) {
                 title={
                   <span className="flex flex-wrap items-center gap-2">
                     {data.name}
-                    {archived ? <Badge tone="neutral">O‘chirilgan</Badge> : null}
+                    {archived ? <Badge tone="neutral">Arxivlangan</Badge> : <CoverageNote ration={data} />}
                   </span>
                 }
                 description={`${data.animalType.name} · ${PURPOSE_LABELS[data.purpose]}`}
                 icon={<Wheat className="size-5" />}
               />
               <CardBody className="flex flex-col gap-5">
+                {archivedFeeds.length > 0 && !archived ? (
+                  <Alert tone="warning" title="Ratsionda arxivlangan yem bor">
+                    {archivedFeeds.map((line) => line.item.name).join(', ')} — omborda yo‘q (arxivlangan), shuning uchun bu
+                    ratsionni ombordan berib bo‘lmaydi. Ratsionni tahrirlab, boshqa yem tanlang.
+                  </Alert>
+                ) : null}
                 <DescriptionList
                   items={[
                     { label: 'Hayvonlar soni', value: `${formatInteger(data.animalCount)} ta` },
@@ -131,7 +170,7 @@ export function RationDetails({ rationId }: { rationId: string }) {
                         icon={<PackageMinus aria-hidden className="size-4" />}
                         onClick={() => setIssuing(true)}
                       >
-                        Sarfni ombordan chiqarish
+                        {ISSUE_ACTION_LABEL}
                       </Button>
                       <Button
                         variant="secondary"
@@ -149,8 +188,8 @@ export function RationDetails({ rationId }: { rationId: string }) {
                       >
                         Nusxalash
                       </Button>
-                      <Button variant="ghost" icon={<Trash2 aria-hidden className="size-4" />} onClick={() => setRemoving(true)}>
-                        O‘chirish
+                      <Button variant="ghost" icon={<Archive aria-hidden className="size-4" />} onClick={() => setRemoving(true)}>
+                        Arxivlash
                       </Button>
                     </>
                   )}
@@ -189,9 +228,9 @@ export function RationDetails({ rationId }: { rationId: string }) {
             {issuing ? <IssueRationDialog ration={data} onClose={() => setIssuing(false)} /> : null}
             <ConfirmDialog
               open={removing}
-              title={`“${data.name}” ratsionini o‘chirish`}
-              message="Ratsion ro‘yxatdan olinadi. Ombordan chiqarilgan sarf tarixi saqlanib qoladi."
-              confirmLabel="O‘chirish"
+              title={`“${data.name}” ratsionini arxivlash`}
+              message="Ratsion ro‘yxatdan olinadi (arxivlanadi). Ombordan chiqarilgan sarf tarixi saqlanib qoladi."
+              confirmLabel="Arxivlash"
               loading={archive.isPending}
               error={archive.error ? errorMessage(archive.error) : null}
               onCancel={() => {
@@ -202,7 +241,7 @@ export function RationDetails({ rationId }: { rationId: string }) {
                 if (archive.isPending) return;
                 archive.mutate(data.id, {
                   onSuccess: () => {
-                    toast.success('Ratsion o‘chirildi');
+                    toast.success('Ratsion arxivlandi');
                     navigate(backTo);
                   },
                 });

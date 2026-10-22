@@ -39,7 +39,7 @@ describe('guest mode (browsing without an account)', () => {
 
   it('an action button opens the login page instead of its dialog', async () => {
     const view = renderApp('/dashboard');
-    await view.user.click(await screen.findByRole('button', { name: 'Berildi — tasdiqlash' }));
+    await view.user.click(await screen.findByRole('button', { name: 'Berildi (ombordan chiqarish)' }));
 
     expect(await screen.findByRole('heading', { name: 'Xush kelibsiz!' })).toBeInTheDocument();
     expect(view.router.state.location.pathname).toBe('/login');

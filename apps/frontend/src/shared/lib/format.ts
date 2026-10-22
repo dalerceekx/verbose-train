@@ -98,6 +98,20 @@ export function formatDateTime(value: string | null | undefined): string {
   return `${p.day}.${p.month}.${p.year}, ${p.hour}:${p.minute}`;
 }
 
+/**
+ * "16:31" for a moment of today (Tashkent), "15.10.2026, 16:31" otherwise —
+ * e.g. when a draft was saved or data was last refreshed.
+ */
+export function formatSavedTime(value: number | string | null | undefined, now: Date = new Date()): string {
+  if (value === null || value === undefined) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  const p = partsOf(date);
+  const today = partsOf(now);
+  const sameDay = p.day === today.day && p.month === today.month && p.year === today.year;
+  return sameDay ? `${p.hour}:${p.minute}` : `${p.day}.${p.month}.${p.year}, ${p.hour}:${p.minute}`;
+}
+
 /** Up to two initials for avatars: "Demo Fermer" → "DF". */
 export function initials(fullName: string | null | undefined): string {
   const words = (fullName ?? '').trim().split(/\s+/).filter(Boolean);

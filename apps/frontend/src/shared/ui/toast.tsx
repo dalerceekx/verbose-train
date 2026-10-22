@@ -1,9 +1,10 @@
-import { CircleAlert, CircleCheck, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { CircleAlert, CircleCheck, Info, X } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
 import { create } from 'zustand';
 import { cn } from '@/shared/lib/cn';
 
-type ToastTone = 'success' | 'error';
+/** `info`: something is under way but not done yet (e.g. queued until the internet is back) — never a success. */
+type ToastTone = 'success' | 'error' | 'info';
 
 interface ToastMessage {
   id: number;
@@ -30,9 +31,16 @@ export const useToastStore = create<ToastState>((set) => ({
 export const toast = {
   success: (message: string) => useToastStore.getState().push('success', message),
   error: (message: string) => useToastStore.getState().push('error', message),
+  info: (message: string) => useToastStore.getState().push('info', message),
 };
 
-const DURATION: Record<ToastTone, number> = { success: 4_000, error: 8_000 };
+const DURATION: Record<ToastTone, number> = { success: 4_000, error: 8_000, info: 8_000 };
+
+const TONE_STYLES: Record<ToastTone, { border: string; icon: ReactNode }> = {
+  success: { border: 'border-success/40', icon: <CircleCheck aria-hidden className="mt-0.5 size-5 shrink-0 text-success" /> },
+  error: { border: 'border-danger/40', icon: <CircleAlert aria-hidden className="mt-0.5 size-5 shrink-0 text-danger" /> },
+  info: { border: 'border-warning/40', icon: <Info aria-hidden className="mt-0.5 size-5 shrink-0 text-warning" /> },
+};
 
 function ToastItem({ toast: item }: { toast: ToastMessage }) {
   const dismiss = useToastStore((state) => state.dismiss);
@@ -41,20 +49,16 @@ function ToastItem({ toast: item }: { toast: ToastMessage }) {
     return () => window.clearTimeout(timer);
   }, [dismiss, item.id, item.tone]);
 
-  const isError = item.tone === 'error';
+  const style = TONE_STYLES[item.tone];
   return (
     <div
-      role={isError ? 'alert' : 'status'}
+      role={item.tone === 'error' ? 'alert' : 'status'}
       className={cn(
         'pointer-events-auto flex w-full items-start gap-3 rounded-[12px] border bg-card px-4 py-3 text-sm text-ink shadow-[0_8px_24px_rgba(45,41,31,0.10)]',
-        isError ? 'border-danger/40' : 'border-success/40',
+        style.border,
       )}
     >
-      {isError ? (
-        <CircleAlert aria-hidden className="mt-0.5 size-5 shrink-0 text-danger" />
-      ) : (
-        <CircleCheck aria-hidden className="mt-0.5 size-5 shrink-0 text-success" />
-      )}
+      {style.icon}
       <p className="flex-1">{item.message}</p>
       <button
         type="button"

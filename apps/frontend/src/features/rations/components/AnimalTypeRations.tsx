@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Eye, PawPrint, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, Copy, Eye, PawPrint, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useFarmAnimals } from '@/features/animals/model/animals.queries';
@@ -48,8 +48,8 @@ function RationRow({ ration, onCopy, onRemove }: { ration: Ration; onCopy: () =>
         <Button size="sm" variant="secondary" icon={<Copy aria-hidden className="size-4" />} onClick={onCopy}>
           Nusxalash
         </Button>
-        <Button size="sm" variant="ghost" icon={<Trash2 aria-hidden className="size-4" />} onClick={onRemove}>
-          O‘chirish
+        <Button size="sm" variant="ghost" icon={<Archive aria-hidden className="size-4" />} onClick={onRemove}>
+          Arxivlash
         </Button>
       </div>
     </li>
@@ -175,9 +175,9 @@ export function AnimalTypeRations({ farm, typeId }: { farm: Farm; typeId: string
 
       <ConfirmDialog
         open={removing !== null}
-        title={`“${removing?.name ?? ''}” ratsionini o‘chirish`}
-        message="Ratsion ro‘yxatdan olinadi. Ombordan chiqarilgan sarf tarixi saqlanib qoladi."
-        confirmLabel="O‘chirish"
+        title={`“${removing?.name ?? ''}” ratsionini arxivlash`}
+        message="Ratsion ro‘yxatdan olinadi (arxivlanadi). Ombordan chiqarilgan sarf tarixi saqlanib qoladi."
+        confirmLabel="Arxivlash"
         loading={archive.isPending}
         error={archive.error ? errorMessage(archive.error) : null}
         onCancel={() => {
@@ -188,7 +188,7 @@ export function AnimalTypeRations({ farm, typeId }: { farm: Farm; typeId: string
           if (!removing || archive.isPending) return;
           archive.mutate(removing.id, {
             onSuccess: () => {
-              toast.success('Ratsion o‘chirildi');
+              toast.success('Ratsion arxivlandi');
               setRemoving(null);
             },
           });

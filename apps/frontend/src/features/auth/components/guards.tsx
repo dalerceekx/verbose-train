@@ -3,7 +3,7 @@ import { ShieldX, WifiOff } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router';
 import type { UserRole } from '@/shared/types/api';
-import { Button, ButtonLink, ErrorState, PageLoader } from '@/shared/ui';
+import { AppShellSkeleton, Button, ButtonLink, ErrorState } from '@/shared/ui';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { roleHome } from '../lib/permissions';
 import { postLoginTarget } from '../lib/redirect';
@@ -22,7 +22,7 @@ function ServerUnreachable() {
         <span aria-hidden className="inline-flex size-12 items-center justify-center rounded-full bg-primary-light">
           <WifiOff className="size-6" />
         </span>
-        <h1 className="text-lg font-semibold">Server bilan aloqa yo‘q</h1>
+        <h1 className="text-lg font-semibold">Aloqa yo‘q</h1>
         <p className="text-ink-secondary">Sessiyani tiklab bo‘lmadi. Internet aloqasini tekshirib, qayta urinib ko‘ring.</p>
         <Button onClick={() => void initSession(queryClient)}>Qayta urinish</Button>
       </div>
@@ -67,22 +67,10 @@ export function RequireAuth({ guests = false }: { guests?: boolean }) {
   const queryClient = useQueryClient();
   const me = useCurrentUser({ guest: guests });
 
-  if (status === 'initializing') {
-    return (
-      <FullScreen>
-        <PageLoader label="Sessiya tekshirilmoqda…" />
-      </FullScreen>
-    );
-  }
+  if (status === 'initializing') return <AppShellSkeleton label="Sessiya tekshirilmoqda…" />;
   if (status === 'unreachable') return <ServerUnreachable />;
   if (status === 'anonymous' && !guests) return <LoginRedirect />;
-  if (me.isPending) {
-    return (
-      <FullScreen>
-        <PageLoader />
-      </FullScreen>
-    );
-  }
+  if (me.isPending) return <AppShellSkeleton />;
   if (me.isError) {
     return (
       <FullScreen>
@@ -124,13 +112,7 @@ export function GuestOnly() {
   const status = useSessionStore((state) => state.status);
   const me = useCurrentUser({ guest: false });
   const location = useLocation();
-  if (status === 'initializing') {
-    return (
-      <FullScreen>
-        <PageLoader label="Sessiya tekshirilmoqda…" />
-      </FullScreen>
-    );
-  }
+  if (status === 'initializing') return <AppShellSkeleton label="Sessiya tekshirilmoqda…" />;
   // Same target as the login flow itself, so the two navigations agree
   // (a lazily loaded target page must not be overridden by the home page).
   if (status === 'authenticated' && me.data) return <Navigate to={postLoginTarget(me.data.role, location.state)} replace />;

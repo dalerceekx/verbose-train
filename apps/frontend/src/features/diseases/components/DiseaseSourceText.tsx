@@ -1,7 +1,9 @@
 import { ArrowLeft, BookOpenText } from 'lucide-react';
 import { Alert, AsyncContent, Badge, ButtonLink, Card, CardBody, CardHeader } from '@/shared/ui';
 import { SAFETY_NOTICE, SOURCE_STATUS_LABEL } from '../lib/labels';
+import { isIntravenous } from '../lib/safety';
 import { useDiseaseSource } from '../model/diseases.queries';
+import { UnapprovedScheme } from './DiseaseSafety';
 
 /** "Asl matn": the whole source, line by line, exactly as supplied. */
 export function DiseaseSourceText() {
@@ -28,12 +30,15 @@ export function DiseaseSourceText() {
               <div>
                 <Badge tone="warning">{SOURCE_STATUS_LABEL}</Badge>
               </div>
-              <pre
-                aria-label="Manba matni"
-                className="font-sans text-[15px] leading-relaxed break-words whitespace-pre-wrap text-ink"
-              >
-                {data.fullText}
-              </pre>
+              {/* The whole text carries every scheme's doses: the same explicit step as on a disease page. */}
+              <UnapprovedScheme intravenous={isIntravenous(data.fullText)} label="Butun matnni ko‘rsatish (tasdiqlanmagan)">
+                <pre
+                  aria-label="Manba matni"
+                  className="font-sans text-[15px] leading-relaxed break-words whitespace-pre-wrap text-ink"
+                >
+                  {data.fullText}
+                </pre>
+              </UnapprovedScheme>
             </CardBody>
           </Card>
         )}

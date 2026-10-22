@@ -28,6 +28,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Background of the square icon. */
   color: string;
+  /** Another name farmers look for the row by, shown under the label. */
+  hint?: string;
   visible: (role: UserRole) => boolean;
 }
 
@@ -70,7 +72,7 @@ export const OMBOR: NavItem[] = [
 
 export const DORIXONA: NavItem[] = [
   { to: '/medicines', label: 'Dori ombori', icon: Pill, color: '#ff2d55', visible: farmer },
-  { to: '/diseases', label: 'Molim kasal', icon: Stethoscope, color: '#ff9500', visible: farmer },
+  { to: '/diseases', label: 'Molim kasal', hint: 'Hayvonim kasal', icon: Stethoscope, color: '#ff9500', visible: farmer },
 ];
 
 export const MORE: NavItem[] = [

@@ -92,37 +92,82 @@ describe('medicines named by a treatment scheme', () => {
 
 describe('whether the pharmacy has a medicine', () => {
   const today = '2026-10-22';
+  const CATALOG = [
+    { id: 'cat-seftonit', name: 'Seftonit' },
+    { id: 'cat-fluneks', name: 'Fluneks' },
+    { id: 'cat-butofan', name: 'Butofan' },
+    { id: 'cat-ivermek', name: 'Ivermek' },
+    { id: 'cat-nitoks', name: 'Nitoks 200' },
+    { id: 'cat-nitoks-la', name: 'Nitoks 200 LA' },
+  ];
 
-  it('matches stock names written differently, at a word start only', () => {
-    const matches = (name: string, medicineName: string) =>
-      stockFor(medicine(medicineName), [item(name, '10.000')], today).state === 'available';
-    expect(matches('Nitoks-200', 'Nitoks 200')).toBe(true);
-    expect(matches('NITOKS 200 LA', 'Nitoks 200')).toBe(true);
-    expect(matches('AD3E vitamin', 'Yog‘li A, D3, E vitaminlar')).toBe(true);
-    expect(matches('Yog‘li A, D3, E', 'Yog‘li A, D3, E vitaminlar')).toBe(true);
-    expect(matches('E selen', 'E-selen')).toBe(true);
-    expect(matches('Eselen 50 ml', 'E-selen')).toBe(true);
-    expect(matches('Septosprey', 'Septo-sprey')).toBe(true);
-    expect(matches('Azit', 'Azitronit')).toBe(false);
-    expect(matches('Antiseftonit', 'Seftonit')).toBe(false);
+  it('a name that only looks like the medicine is "similar", matched at a word start only', () => {
+    const state = (name: string, medicineName: string) =>
+      stockFor(medicine(medicineName), [item(name, '10.000')], today, CATALOG).state;
+    expect(state('Nitoks-200', 'Nitoks 200')).toBe('similar');
+    expect(state('NITOKS 200 LA', 'Nitoks 200')).toBe('similar');
+    expect(state('AD3E vitamin', 'Yog‘li A, D3, E vitaminlar')).toBe('similar');
+    expect(state('Yog‘li A, D3, E', 'Yog‘li A, D3, E vitaminlar')).toBe('similar');
+    expect(state('E selen', 'E-selen')).toBe('similar');
+    expect(state('Eselen 50 ml', 'E-selen')).toBe('similar');
+    expect(state('Septosprey', 'Septo-sprey')).toBe('similar');
+    expect(state('Azit', 'Azitronit')).toBe('missing');
+    expect(state('Antiseftonit', 'Seftonit')).toBe('missing');
   });
 
-  it('available: the usable stock, summed', () => {
+  it('a similar name linked to another catalog entry is never reported as available', () => {
+    const result = stockFor(
+      medicine('Nitoks 200'),
+      [item('Nitoks 200', '100.000', { medicineId: 'cat-nitoks-la' })],
+      today,
+      CATALOG,
+    );
+    expect(result.state).toBe('similar');
+    expect(result.items.map((entry) => entry.name)).toEqual(['Nitoks 200']);
+  });
+
+  it('available: the usable stock linked to the catalog entry, summed', () => {
     const result = stockFor(
       medicine('Seftonit'),
-      [item('Seftonit', '40.000'), item('Seftonit 100 ml', '60.000', { expiresOn: today }), item('Fluneks', '5.000')],
+      [
+        item('Seftonit', '40.000', { medicineId: 'cat-seftonit' }),
+        item('Seftonit 100 ml', '60.000', { medicineId: 'cat-seftonit', expiresOn: today }),
+        item('Seftonit (eski)', '25.000'),
+        item('Fluneks', '5.000', { medicineId: 'cat-fluneks' }),
+      ],
       today,
+      CATALOG,
     );
     expect(result.state).toBe('available');
     expect(result.items.map((entry) => entry.quantity)).toEqual(['40.000', '60.000']);
   });
 
+  it('without a catalog the scheme medicine cannot be confirmed: only "similar"', () => {
+    expect(stockFor(medicine('Seftonit'), [item('Seftonit', '40.000', { medicineId: 'cat-seftonit' })], today).state).toBe(
+      'similar',
+    );
+  });
+
   it('expired, empty and missing are told apart; archived items do not count', () => {
-    expect(stockFor(medicine('Fluneks'), [item('Fluneks', '50.000', { expiresOn: '2026-10-21' })], today).state).toBe('expired');
-    expect(stockFor(medicine('Butofan'), [item('Butofan', '0.000')], today).state).toBe('empty');
-    expect(stockFor(medicine('Ivermek'), [], today).state).toBe('missing');
     expect(
-      stockFor(medicine('Ivermek'), [item('Ivermek', '20.000', { archivedAt: '2026-10-01T00:00:00.000Z' })], today).state,
+      stockFor(
+        medicine('Fluneks'),
+        [item('Fluneks', '50.000', { medicineId: 'cat-fluneks', expiresOn: '2026-10-21' })],
+        today,
+        CATALOG,
+      ).state,
+    ).toBe('expired');
+    expect(stockFor(medicine('Butofan'), [item('Butofan', '0.000', { medicineId: 'cat-butofan' })], today, CATALOG).state).toBe(
+      'empty',
+    );
+    expect(stockFor(medicine('Ivermek'), [], today, CATALOG).state).toBe('missing');
+    expect(
+      stockFor(
+        medicine('Ivermek'),
+        [item('Ivermek', '20.000', { medicineId: 'cat-ivermek', archivedAt: '2026-10-01T00:00:00.000Z' })],
+        today,
+        CATALOG,
+      ).state,
     ).toBe('missing');
   });
 });

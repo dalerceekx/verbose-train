@@ -120,8 +120,8 @@ export function ProfileEmailPage() {
         ) : null}
         <GapState
           className="py-8"
-          title="Email qo‘shish va tasdiqlash hali backend’da mavjud emas"
-          description="Server email ulash, tasdiqlash kodi yuborish va email orqali kirishni hozircha qo‘llab-quvvatlamaydi. Bu imkoniyat qo‘shilganda shu yerda paydo bo‘ladi."
+          title="Email qo‘shish va tasdiqlash — tez orada"
+          description="Email ulash, tasdiqlash kodi yuborish va email orqali kirish hozircha mavjud emas. Bu imkoniyat qo‘shilganda shu yerda paydo bo‘ladi."
         />
       </CardBody>
     </Card>
@@ -169,14 +169,14 @@ export function ProfileSecurityPage() {
             <li className="flex items-center justify-between gap-3 py-3">
               <div>
                 <p className="font-medium">Email + parol</p>
-                <p className="text-[13px] text-ink-secondary">Backend’da hali mavjud emas</p>
+                <p className="text-[13px] text-ink-secondary">Hozircha mavjud emas</p>
               </div>
               <Badge tone="warning">Tez orada</Badge>
             </li>
             <li className="flex items-center justify-between gap-3 py-3">
               <div>
                 <p className="font-medium">Telefon + SMS kod</p>
-                <p className="text-[13px] text-ink-secondary">Backend’da hali mavjud emas</p>
+                <p className="text-[13px] text-ink-secondary">Hozircha mavjud emas</p>
               </div>
               <Badge tone="warning">Tez orada</Badge>
             </li>

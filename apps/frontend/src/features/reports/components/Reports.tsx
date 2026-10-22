@@ -24,7 +24,19 @@ import { useInventoryItems, useLedger } from '@/features/inventory/model/invento
 import { Decimal } from '@/shared/lib/decimal';
 import { formatMonthShort } from '@/shared/lib/dates';
 import { formatCompact, formatDate, formatDecimal, formatInteger, formatMoney } from '@/shared/lib/format';
-import { Alert, Badge, Card, CardBody, CardHeader, ErrorState, Field, Select, Skeleton } from '@/shared/ui';
+import {
+  Alert,
+  Badge,
+  Card,
+  CardBody,
+  CardHeader,
+  ErrorState,
+  Field,
+  OfflineState,
+  queryLoadState,
+  Select,
+  Skeleton,
+} from '@/shared/ui';
 import { BarChartView, BarList, ChartTable } from '@/shared/ui/charts';
 
 function ReportCard({
@@ -89,6 +101,8 @@ function AnimalReports({ farm }: { farm: Farm }) {
       >
         {counts.error ? (
           <ErrorState error={counts.error} collection onRetry={counts.refetch} />
+        ) : counts.isPaused ? (
+          <OfflineState />
         ) : counts.isPending ? (
           <ChartSkeleton />
         ) : speciesData.length === 0 ? (
@@ -126,6 +140,8 @@ function AnimalReports({ farm }: { farm: Farm }) {
         </div>
         {animals.isError ? (
           <ErrorState error={animals.error} collection onRetry={() => void animals.refetch()} />
+        ) : queryLoadState(animals).failed ? (
+          <OfflineState />
         ) : animals.isPending ? (
           <ChartSkeleton />
         ) : ageData.every((row) => row.count === 0) ? (
@@ -197,8 +213,17 @@ function LedgerReports({ farm, range }: { farm: Farm; range: DateRange }) {
       </Card>
     );
   }
+  // Offline with nothing cached: "not loaded", never charts and totals of 0 so‘m.
+  if (queryLoadState(ledger).failed) {
+    return (
+      <Card>
+        <OfflineState />
+      </Card>
+    );
+  }
 
   const loading = ledger.isPending;
+  const totalOf = (amount: Decimal) => (loading ? 'yuklanmoqda…' : formatMoney(amount));
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       {ledger.data?.truncated ? (
@@ -209,7 +234,7 @@ function LedgerReports({ farm, range }: { farm: Farm; range: DateRange }) {
 
       <ReportCard
         title="Yem sarfi (oylik)"
-        description={chartUnit ? `Chiqimlar, ${UNIT_SHORT[chartUnit]}` : 'Ombordan chiqarilgan yem'}
+        description={`${chartUnit ? `Chiqimlar, ${UNIT_SHORT[chartUnit]}` : 'Ombordan chiqarilgan yem'} — so‘mdagi qiymati (tannarx) tez orada`}
         icon={<Warehouse className="size-5" />}
       >
         {loading ? (
@@ -239,7 +264,7 @@ function LedgerReports({ farm, range }: { farm: Farm; range: DateRange }) {
 
       <ReportCard
         title="Yem xaridi xarajatlari"
-        description={`Jami: ${formatMoney(sumAmounts(feedPurchases))}`}
+        description={`Jami: ${totalOf(sumAmounts(feedPurchases))} · boshlang‘ich qoldiq kirmaydi`}
         icon={<ShoppingCart className="size-5" />}
       >
         {loading ? (
@@ -268,7 +293,11 @@ function LedgerReports({ farm, range }: { farm: Farm; range: DateRange }) {
         )}
       </ReportCard>
 
-      <ReportCard title="Oylik xarajatlar" description="Toifalar bo‘yicha ombor xaridlari" icon={<Wallet className="size-5" />}>
+      <ReportCard
+        title="Oylik xarajatlar"
+        description="Toifalar bo‘yicha narxli xaridlar (boshlang‘ich qoldiq — xarajat emas)"
+        icon={<Wallet className="size-5" />}
+      >
         {loading ? (
           <ChartSkeleton />
         ) : purchases.length === 0 ? (
@@ -303,7 +332,7 @@ function LedgerReports({ farm, range }: { farm: Farm; range: DateRange }) {
 
       <ReportCard
         title="Xarajatlar taqsimoti"
-        description={`Davr bo‘yicha jami: ${formatMoney(total)}`}
+        description={`Davr bo‘yicha jami: ${totalOf(total)}`}
         icon={<ChartColumn className="size-5" />}
       >
         {loading ? (
@@ -345,6 +374,8 @@ function MedicineReport({ farm }: { farm: Farm }) {
     <ReportCard title="Dori zaxirasi" description="Yaroqlilik muddati holati" icon={<Pill className="size-5" />}>
       {items.isError ? (
         <ErrorState error={items.error} collection onRetry={() => void items.refetch()} />
+      ) : queryLoadState(items).failed ? (
+        <OfflineState />
       ) : items.isPending ? (
         <Skeleton className="h-24" />
       ) : rows.length === 0 ? (
@@ -391,7 +422,7 @@ export function Reports({ farm }: { farm: Farm }) {
           </div>
           <p className="text-sm text-ink-secondary">
             Ferma: <strong className="text-ink">{farm.name}</strong> (yuqoridagi ferma tanlagichi orqali almashtiriladi). Barcha
-            raqamlar server ma’lumotlaridan hisoblangan.
+            raqamlar fermangiz yozuvlaridan hisoblangan. Xarajat — narxi bilan kiritilgan xarid; boshlang‘ich qoldiq xarajat emas.
           </p>
         </CardBody>
       </Card>

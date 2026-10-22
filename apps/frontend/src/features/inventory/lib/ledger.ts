@@ -2,6 +2,7 @@ import { Decimal } from '@/shared/lib/decimal';
 import { monthKey, todayInTashkent } from '@/shared/lib/dates';
 import type { InventoryCategory, InventoryUnit } from '../api/inventory.api';
 import type { LedgerMovement } from '../model/inventory.queries';
+import { isOpeningBalance } from './labels';
 
 export interface DateRange {
   /** 'YYYY-MM-DD', inclusive (Tashkent calendar). */
@@ -49,19 +50,30 @@ export interface Purchase {
   amount: Decimal;
 }
 
+function valued(movement: LedgerMovement): Purchase {
+  return {
+    movement,
+    amount: Decimal.from(movement.quantity)
+      .mul(Decimal.from(movement.unitCost ?? '0'))
+      .round(2),
+  };
+}
+
 /**
  * Spending the backend can actually prove: stock intakes (IN) recorded with
- * a unit cost. Movements without a price are never valued.
+ * a unit cost. Movements without a price are never valued, and the starting
+ * stock of a new item ("Boshlang‘ich qoldiq") was already on the farm — it
+ * is part of the warehouse value, never this month's spending.
  */
 export function purchasesOf(movements: LedgerMovement[]): Purchase[] {
   return movements
-    .filter((movement) => movement.type === 'IN' && movement.unitCost !== null)
-    .map((movement) => ({
-      movement,
-      amount: Decimal.from(movement.quantity)
-        .mul(Decimal.from(movement.unitCost ?? '0'))
-        .round(2),
-    }));
+    .filter((movement) => movement.type === 'IN' && movement.unitCost !== null && !isOpeningBalance(movement))
+    .map(valued);
+}
+
+/** Starting stock entered with a price: shown apart from purchases (warehouse value, not an expense). */
+export function openingBalancesOf(movements: LedgerMovement[]): Purchase[] {
+  return movements.filter((movement) => movement.unitCost !== null && isOpeningBalance(movement)).map(valued);
 }
 
 export function sumAmounts(purchases: Purchase[]): Decimal {

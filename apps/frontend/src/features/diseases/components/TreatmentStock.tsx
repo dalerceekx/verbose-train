@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { useActiveFarm } from '@/features/farms/model/active-farm';
 import { formatTotals, totalsByUnit } from '@/features/inventory/lib/stock-math';
 import { useInventoryItems } from '@/features/inventory/model/inventory.queries';
+import { useMedicineCatalog } from '@/features/medicines/model/medicines.queries';
 import { todayInTashkent } from '@/shared/lib/dates';
 import { Badge, ButtonLink, ErrorState, Skeleton, type BadgeTone } from '@/shared/ui';
 import type { DiseaseDetails } from '../api/diseases.api';
@@ -11,6 +12,7 @@ import { medicinesInTreatment, stockFor, type MedicineStock, type TreatmentMedic
 
 const STATE_BADGE: Record<MedicineStock['state'], { tone: BadgeTone; label: string }> = {
   available: { tone: 'success', label: 'Bor' },
+  similar: { tone: 'warning', label: 'Nomi o‘xshash — tekshiring' },
   expired: { tone: 'warning', label: 'Muddati o‘tgan' },
   empty: { tone: 'warning', label: 'Tugagan' },
   missing: { tone: 'danger', label: 'Yo‘q' },
@@ -20,14 +22,21 @@ function StockRow({ row }: { row: MedicineStock }) {
   const badge = STATE_BADGE[row.state];
   const [first] = row.items;
   return (
-    <li className="flex items-center justify-between gap-3 py-2.5">
-      {first ? (
-        <Link to={`/medicines/stock/${first.id}`} className="min-w-0 font-medium text-ink hover:underline">
-          {row.medicine.name}
-        </Link>
-      ) : (
-        <span className="min-w-0 font-medium text-ink">{row.medicine.name}</span>
-      )}
+    <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5">
+      <span className="min-w-0">
+        {first ? (
+          <Link to={`/medicines/stock/${first.id}`} className="font-medium text-ink hover:underline">
+            {row.medicine.name}
+          </Link>
+        ) : (
+          <span className="font-medium text-ink">{row.medicine.name}</span>
+        )}
+        {row.state === 'similar' ? (
+          <span className="block text-[13px] text-ink-secondary">
+            Omborda: {row.items.map((item) => `${item.name}${item.medicineId ? '' : ' (katalogga bog‘lanmagan)'}`).join(', ')}
+          </span>
+        ) : null}
+      </span>
       <Badge tone={badge.tone}>
         {row.state === 'available' ? `${badge.label} · ${formatTotals(totalsByUnit(row.items))}` : badge.label}
       </Badge>
@@ -37,17 +46,22 @@ function StockRow({ row }: { row: MedicineStock }) {
 
 function StockList({ farmId, medicines }: { farmId: string; medicines: TreatmentMedicine[] }) {
   const items = useInventoryItems(farmId, 'MEDICINE');
+  // Approved catalog: "Bor" is confirmed through it, never by a similar name.
+  const catalog = useMedicineCatalog();
   const today = todayInTashkent();
 
-  if (items.isPending) return <Skeleton className="h-28" />;
+  if (items.isPending || (catalog.isPending && catalog.fetchStatus === 'fetching')) return <Skeleton className="h-28" />;
   if (items.isError) return <ErrorState error={items.error} collection onRetry={() => void items.refetch()} />;
 
-  const rows = medicines.map((medicine) => stockFor(medicine, items.data.items, today));
+  const approved = (catalog.data ?? []).filter((medicine) => medicine.status === 'APPROVED');
+  const rows = medicines.map((medicine) => stockFor(medicine, items.data.items, today, approved));
   const available = rows.filter((row) => row.state === 'available').length;
+  const similar = rows.filter((row) => row.state === 'similar').length;
   return (
     <>
       <p className="text-sm text-ink-secondary">
-        Sxemadagi {medicines.length} ta doridan {available} tasi dorixonangizda bor.
+        Sxemadagi {medicines.length} ta doridan {available} tasi dorixonangizda bor
+        {similar > 0 ? `, ${similar} tasining faqat nomi o‘xshash — tekshiring` : ''}.
       </p>
       <ul className="divide-y divide-line">
         {rows.map((row) => (
@@ -83,8 +97,9 @@ export function TreatmentStock({ lines }: { lines: DiseaseDetails['lines'] }) {
         <p className="text-sm text-ink-secondary">Dorixonani ko‘rish uchun avval ferma qo‘shing.</p>
       )}
       <p className="text-[13px] text-ink-muted">
-        Dorilar nomi bo‘yicha solishtiriladi. «Bittasi tanlanadi» deyilgan joyda ulardan biri yetadi; dorini veterinar bilan
-        kelishib bering.
+        «Bor» faqat ombordagi dori tasdiqlangan katalogdagi aynan shu doriga bog‘langan bo‘lsa chiqadi. Nomi o‘xshash dori boshqa
+        konsentratsiyada bo‘lishi mumkin — veterinar bilan tekshiring; dori omboriga qo‘shishda «Katalogdagi dori»ni tanlang.
+        «Bittasi tanlanadi» deyilgan joyda ulardan biri yetadi.
       </p>
       <div>
         <ButtonLink to="/medicines" variant="secondary" size="sm" icon={<Pill aria-hidden className="size-4" />}>

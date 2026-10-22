@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerMovement } from '../model/inventory.queries';
 import { expiryStatus } from './expiry';
-import { inRange, monthsInRange, purchasesByMonth, purchasesOf, sumAmounts } from './ledger';
+import { inRange, monthsInRange, openingBalancesOf, purchasesByMonth, purchasesOf, sumAmounts } from './ledger';
 
 function movement(partial: Partial<LedgerMovement>): LedgerMovement {
   return {
@@ -57,6 +57,27 @@ describe('ledger maths', () => {
     const lateNight = movement({ createdAt: '2026-10-31T19:30:00.000Z' });
     expect(inRange(lateNight, { from: '2026-11-01', to: '2026-11-30' })).toBe(true);
     expect(inRange(lateNight, { from: '2026-10-01', to: '2026-10-31' })).toBe(false);
+  });
+});
+
+describe('starting stock is not an expense', () => {
+  const movements = [
+    // A new item's starting stock: the backend writes it as a priced IN with this reason.
+    movement({ quantity: '140.000', unitCost: '3000.00', reason: 'Boshlang‘ich qoldiq' }),
+    movement({ quantity: '100.000', unitCost: '3200.00', reason: null }),
+    movement({ quantity: '5.000', unitCost: null, reason: 'O‘z hosilimiz' }),
+  ];
+
+  it('purchases leave the opening balance out; it is listed apart as warehouse value', () => {
+    expect(sumAmounts(purchasesOf(movements)).toString()).toBe('320000');
+    const opening = openingBalancesOf(movements);
+    expect(opening).toHaveLength(1);
+    expect(sumAmounts(opening).toString()).toBe('420000');
+  });
+
+  it('recognizes the reason whatever its apostrophe or case', () => {
+    const typed = movement({ quantity: '1.000', unitCost: '10.00', reason: "boshlang'ich qoldiq" });
+    expect(purchasesOf([typed])).toHaveLength(0);
   });
 });
 

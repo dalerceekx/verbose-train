@@ -104,7 +104,8 @@ export function DataTable<T>({ columns, rows, rowKey, caption, onRowClick, mobil
   }
 
   return (
-    <div className="overflow-x-auto">
+    // `relative`: visually hidden (absolute) header text scrolls with the table instead of widening the page.
+    <div className="relative overflow-x-auto">
       <table className="w-full border-collapse text-left text-[15px]">
         <caption className="sr-only">{caption}</caption>
         <thead>

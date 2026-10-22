@@ -120,12 +120,14 @@ describe('feed calculator — rations', () => {
     await view.user.type(await screen.findByLabelText(/Ratsion nomi/), 'Qishki semirtirish');
     await view.user.type(screen.getByLabelText(/Hayvonlar soni/), '10');
     await screen.findByRole('option', { name: /Arpa/ });
-    await view.user.selectOptions(screen.getByLabelText('1-yem'), item('Arpa')?.id ?? '');
+    await view.user.selectOptions(screen.getByRole('combobox', { name: '1-yem' }), item('Arpa')?.id ?? '');
     await view.user.type(screen.getAllByLabelText(/Bir boshga, kuniga/)[0] as HTMLElement, '8');
     await view.user.click(screen.getByRole('button', { name: 'Yem qo‘shish' }));
     // A feed already in the ration is not offered twice.
-    expect(within(screen.getByLabelText('2-yem')).queryByRole('option', { name: /Arpa/ })).not.toBeInTheDocument();
-    await view.user.selectOptions(screen.getByLabelText('2-yem'), item('Pichan')?.id ?? '');
+    expect(
+      within(screen.getByRole('combobox', { name: '2-yem' })).queryByRole('option', { name: /Arpa/ }),
+    ).not.toBeInTheDocument();
+    await view.user.selectOptions(screen.getByRole('combobox', { name: '2-yem' }), item('Pichan')?.id ?? '');
     await view.user.type(screen.getAllByLabelText(/Bir boshga, kuniga/)[1] as HTMLElement, '5');
 
     // 10 × (8 + 5) kg a day, 30 days; 80 × 3 400 + 50 × 1 500 so‘m a day.
@@ -160,8 +162,8 @@ describe('feed calculator — rations', () => {
   it('issues the real consumption from the warehouse, all or nothing', async () => {
     const ration = seedRation();
     const view = renderApp(`/feed-calculator/rations/${ration.id}`);
-    await view.user.click(await screen.findByRole('button', { name: 'Sarfni ombordan chiqarish' }));
-    let dialog = await screen.findByRole('dialog', { name: 'Sarfni ombordan chiqarish' });
+    await view.user.click(await screen.findByRole('button', { name: 'Berildi (ombordan chiqarish)' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Berildi (ombordan chiqarish)' });
     // 30 days need 2 400 kg of barley: the whole issue is refused before the API.
     await view.user.click(within(dialog).getByRole('button', { name: '30 kun' }));
     expect(within(dialog).getByText('Omborda yetarli yem yo‘q')).toBeInTheDocument();
@@ -181,11 +183,16 @@ describe('feed calculator — rations', () => {
     expect(await within(history).findByText(/1 kunlik · 10 bosh/)).toBeInTheDocument();
     expect(within(history).getByText(/Arpa: −80 kg/)).toBeInTheDocument();
 
+    // Today is already given: issuing again needs an explicit "extra issue" confirmation.
+    await view.user.click(screen.getByRole('button', { name: 'Berildi (ombordan chiqarish)' }));
+    dialog = await screen.findByRole('dialog', { name: 'Berildi (ombordan chiqarish)' });
+    expect(await within(dialog).findByText('Bu kunlar uchun allaqachon berilgan')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Ombordan chiqarish' })).toBeDisabled();
+    await view.user.click(within(dialog).getByRole('checkbox', { name: 'Bu qo‘shimcha berish — ataylab yana chiqaraman' }));
+
     // Stock changed on another device: the server refuses and names the feed.
     const arpa = item('Arpa');
     if (arpa) arpa.quantity = '10.000';
-    await view.user.click(screen.getByRole('button', { name: 'Sarfni ombordan chiqarish' }));
-    dialog = await screen.findByRole('dialog', { name: 'Sarfni ombordan chiqarish' });
     await view.user.click(within(dialog).getByRole('button', { name: 'Ombordan chiqarish' }));
     expect(await within(dialog).findByText('Ombordagi qoldiq o‘zgargan')).toBeInTheDocument();
     expect(within(dialog).getByText(/Arpa: kerak 80 kg, bor 10 kg/)).toBeInTheDocument();
@@ -200,7 +207,7 @@ describe('feed calculator — rations', () => {
 
     await view.user.click(within(list).getByRole('button', { name: 'Nusxalash' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Ratsion natijalari' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { level: 2, name: 'Semirtirish (nusxa)' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: /^Semirtirish \(nusxa\)/ })).toBeInTheDocument();
 
     await view.user.click(screen.getByRole('link', { name: 'Ratsionni tahrirlash' }));
     const count = await screen.findByLabelText(/Hayvonlar soni/);
@@ -213,9 +220,9 @@ describe('feed calculator — rations', () => {
     const patch = api.requests.find((request) => request.method === 'PATCH');
     expect(patch?.body).toMatchObject({ animalCount: 12, averageWeightKg: '450', ageMonths: 18 });
 
-    await view.user.click(await screen.findByRole('button', { name: 'O‘chirish' }));
-    const confirm = await screen.findByRole('dialog', { name: '“Semirtirish (nusxa)” ratsionini o‘chirish' });
-    await view.user.click(within(confirm).getByRole('button', { name: 'O‘chirish' }));
+    await view.user.click(await screen.findByRole('button', { name: 'Arxivlash' }));
+    const confirm = await screen.findByRole('dialog', { name: '“Semirtirish (nusxa)” ratsionini arxivlash' });
+    await view.user.click(within(confirm).getByRole('button', { name: 'Arxivlash' }));
     // The list refetches after the delete: only the original remains.
     await waitFor(() =>
       expect(within(screen.getByRole('list', { name: 'Buqa ratsionlari' })).getAllByRole('listitem')).toHaveLength(1),
@@ -233,17 +240,17 @@ describe('dashboard — today’s ration', () => {
     expect(within(slides).getByText('Hali berilmagan')).toBeInTheDocument();
     expect(within(card).getByText(/0 \/ 1 ta ratsion berildi/)).toBeInTheDocument();
 
-    await view.user.click(within(slides).getByRole('button', { name: 'Berildi — tasdiqlash' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Bugungi ratsion berildimi?' });
+    await view.user.click(within(slides).getByRole('button', { name: 'Berildi (ombordan chiqarish)' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Berildi (ombordan chiqarish): bugun' });
     // One day only: no day picker in the confirmation.
     expect(within(dialog).queryByLabelText(/Necha kunlik sarf/)).not.toBeInTheDocument();
-    await view.user.click(within(dialog).getByRole('button', { name: 'Ha, berildi' }));
+    await view.user.click(within(dialog).getByRole('button', { name: 'Ombordan chiqarish' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     expect(posts('/issue')[0]?.body).toEqual({ days: 1 });
     expect(item('Arpa')?.quantity).toBe('1170.000');
     expect(await within(card).findByText(/Bugun berildi/)).toBeInTheDocument();
     expect(within(card).getByText(/1 \/ 1 ta ratsion berildi/)).toBeInTheDocument();
-    expect(within(card).queryByRole('button', { name: 'Berildi — tasdiqlash' })).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Berildi (ombordan chiqarish)' })).not.toBeInTheDocument();
   });
 });

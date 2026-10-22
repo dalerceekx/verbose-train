@@ -29,7 +29,7 @@ export function AnimalTypeGrid({ farm }: { farm: Farm }) {
       <Alert tone="info" title="Hisob siz kiritgan miqdorlar asosida">
         Hayvon turini tanlang va ombordagi yemlardan ratsion tuzing: kunlik va umumiy sarf, xarajat va ombor yetarliligi
         hisoblanadi. Dastur oziqlantirish me’yorini tavsiya qilmaydi. Hisoblash ombordagi qoldiqni o‘zgartirmaydi — u faqat
-        “Sarfni ombordan chiqarish”ni tasdiqlaganingizda kamayadi.
+        “Berildi (ombordan chiqarish)”ni tasdiqlaganingizda kamayadi.
       </Alert>
 
       <section aria-label="Hayvon turlari">

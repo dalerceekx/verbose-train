@@ -84,7 +84,8 @@ export function Field({ label, id, hint, error, required, className, children }:
   const control = isValidElement(children)
     ? cloneElement(children, {
         id: controlId,
-        'aria-invalid': error ? true : undefined,
+        // Explicit false: an untouched required select is not announced as invalid by the browser.
+        'aria-invalid': error ? true : false,
         'aria-describedby': describedBy,
         required: required || undefined,
       })

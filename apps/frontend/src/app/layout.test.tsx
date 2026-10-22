@@ -1,4 +1,5 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { AxiosError, type AxiosAdapter } from 'axios';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MOCK_PASSWORDS } from '@/mocks/db';
 import { http } from '@/shared/api/client';
@@ -23,6 +24,43 @@ const sheetButton = (name: string) =>
 const sheet = (name: string) => screen.queryByRole('navigation', { name });
 const tabLabels = (nav: HTMLElement) => [...nav.querySelectorAll('.tab-label')].map((label) => label.textContent);
 
+describe('while the session is restored', () => {
+  it('shows the outline of the app instead of a blank page', async () => {
+    signIn(api, PHONES.farmer, MOCK_PASSWORDS.farmer);
+    // A slow network: the session check takes a moment.
+    const adapter = http.defaults.adapter as AxiosAdapter;
+    http.defaults.adapter = async (config) => {
+      if (String(config.url).endsWith('/auth/refresh')) await new Promise((resolve) => setTimeout(resolve, 150));
+      return adapter(config);
+    };
+    const first = renderApp('/dashboard');
+    // The first page's code is still loading: skeleton blocks, not a lone spinner.
+    expect(screen.getByRole('status').querySelectorAll('.animate-pulse').length).toBeGreaterThan(3);
+    expect(await screen.findByRole('region', { name: 'Asosiy ko‘rsatkichlar' })).toBeInTheDocument();
+    first.unmount();
+
+    // A page without code to load waits only for the session check — the same outline.
+    renderApp('/profile');
+    const checking = screen.getByText('Sessiya tekshirilmoqda…').closest('[role="status"]') as HTMLElement;
+    expect(checking.querySelectorAll('.animate-pulse').length).toBeGreaterThan(3);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Profil' })).toBeInTheDocument();
+    expect(screen.queryByText('Sessiya tekshirilmoqda…')).not.toBeInTheDocument();
+  });
+
+  it('says plainly that there is no connection when the session cannot be checked', async () => {
+    signIn(api, PHONES.farmer, MOCK_PASSWORDS.farmer);
+    const adapter = http.defaults.adapter as AxiosAdapter;
+    http.defaults.adapter = (config) =>
+      String(config.url).endsWith('/auth/refresh')
+        ? Promise.reject(new AxiosError('Network Error', AxiosError.ERR_NETWORK, config))
+        : adapter(config);
+    renderApp('/dashboard');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Aloqa yo‘q' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Qayta urinish' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/server/i);
+  });
+});
+
 describe('dashboard layout', () => {
   it('renders the farmer dashboard from API data with honest gaps', async () => {
     signIn(api, PHONES.farmer, MOCK_PASSWORDS.farmer);
@@ -34,9 +72,17 @@ describe('dashboard layout', () => {
     expect(within(groups as HTMLElement).getByText('Tez orada')).toBeInTheDocument();
     expect(within(groups as HTMLElement).getByText('—')).toBeInTheDocument();
     const quickActions = screen.getByRole('region', { name: 'Tezkor amallar' });
-    for (const action of ['Hayvon qo‘shish', 'Yem qo‘shish', 'Yem hisoblash', 'Xarajat kiritish']) {
+    for (const action of ['Hayvon qo‘shish', 'Yem qo‘shish', 'Yem hisoblash', 'Xarid kiritish']) {
       expect(within(quickActions).getByRole('link', { name: new RegExp(action) })).toBeInTheDocument();
     }
+    // The species under "Jami hayvonlar" add up to the total.
+    const total = within(stats).getByText('Jami hayvonlar').closest('a') as HTMLElement;
+    const summary = within(total).getByText(/:\s\d/).textContent ?? '';
+    const counted = [...summary.matchAll(/: (\d+)|\((\d+) bosh\)/g)].reduce(
+      (sum, match) => sum + Number(match[1] ?? match[2]),
+      0,
+    );
+    expect(counted).toBe(12);
   });
 
   it('turns a 404 list endpoint into an "not deployed yet" state, not fake data', async () => {
@@ -49,7 +95,7 @@ describe('dashboard layout', () => {
         ? { status: 404, body: { statusCode: 404, code: 'NOT_FOUND', message: 'Topilmadi', requestId: 'r' } }
         : original(request);
     renderApp('/feed');
-    expect((await screen.findAllByText('Bu bo‘lim backend’da hali ishga tushirilmagan')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Bu bo‘lim hozircha ishga tushirilmagan')).length).toBeGreaterThan(0);
     expect(screen.queryByRole('cell', { name: 'Arpa' })).not.toBeInTheDocument();
     http.defaults.adapter = adapter;
   });
@@ -84,7 +130,7 @@ describe('tab bar', () => {
     await waitFor(() => expect(sheetButton('Dorixona')).toHaveAttribute('aria-current', 'true'));
   });
 
-  it('opens Dorixona after Bosh sahifa: Dori ombori and Molim kasal', async () => {
+  it('opens Dorixona after Bosh sahifa: Dori ombori and Molim kasal (also called "Hayvonim kasal")', async () => {
     signIn(api, PHONES.farmer, MOCK_PASSWORDS.farmer);
     const view = renderApp('/dashboard');
     await tabBar();
@@ -95,10 +141,11 @@ describe('tab bar', () => {
       within(pharmacy)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Dori ombori', 'Molim kasal']);
+    ).toEqual(['Dori ombori', 'Molim kasal Hayvonim kasal']);
 
-    await view.user.click(within(pharmacy).getByRole('link', { name: 'Molim kasal' }));
+    await view.user.click(within(pharmacy).getByRole('link', { name: /Hayvonim kasal/ }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Molim kasal' })).toBeInTheDocument();
+    expect(screen.getByText(/^Hayvonim kasal: kasalliklar ma’lumotnomasi/)).toBeInTheDocument();
     expect(await screen.findByRole('region', { name: 'Kasalliklar' })).toBeInTheDocument();
     expect(sheetButton('Dorixona')).toHaveAttribute('aria-current', 'true');
   });
@@ -221,9 +268,9 @@ describe('expenses panel on the dashboard', () => {
     const view = renderApp('/dashboard');
     const panel = await screen.findByRole('region', { name: 'Xarajatlar' });
     await view.user.click(within(panel).getByRole('button', { name: 'Barcha davr' }));
-    await view.user.click(within(panel).getByRole('button', { name: 'Xarajat qo‘shish' }));
+    await view.user.click(within(panel).getByRole('button', { name: 'Xarid qo‘shish' }));
 
-    const picker = await screen.findByRole('dialog', { name: 'Xarajat qo‘shish' });
+    const picker = await screen.findByRole('dialog', { name: 'Xarid qo‘shish' });
     await view.user.selectOptions(await within(picker).findByLabelText('Nima sotib olindi?'), 'Kepak');
     await view.user.click(within(picker).getByRole('button', { name: 'Davom etish' }));
 

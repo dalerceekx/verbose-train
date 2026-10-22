@@ -375,4 +375,21 @@
       display: none !important;
     }
   }
+
+  /* A value that has just changed (e.g. a ration's period cost) glows briefly. */
+  .value-flash {
+    border-radius: 6px;
+    animation: value-flash 1.2s ease-out;
+  }
+}
+
+@keyframes value-flash {
+  from {
+    background-color: var(--primary-light);
+    box-shadow: 0 0 0 4px var(--primary-light);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: 0 0 0 4px transparent;
+  }
 }

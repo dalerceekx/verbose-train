@@ -1,19 +1,17 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { useActiveFarm } from '@/features/farms/model/active-farm';
-import { isLowStock } from '@/features/inventory/lib/stock-math';
-import { useInventoryItems } from '@/features/inventory/model/inventory.queries';
+import { useFeedAvailability } from '@/features/rations/model/useFeedAvailability';
 import { cn } from '@/shared/lib/cn';
 import type { UserRole } from '@/shared/types/api';
 import { navigationFor, tabIndexFor, type SheetTab } from './navigation';
 
 const sheetId = (id: string) => `${id}-sheet`;
 
-/** Feeds at or below the farmer's minimum, or empty ("qoldiq nazorati"). */
+/** Empty or low feeds — the same rule as the warehouse page (minimum, or too few days for the rations). */
 function LowFeedCount({ farmId, children }: { farmId: string; children: (count: number) => ReactNode }) {
-  const feed = useInventoryItems(farmId, 'FEED');
-  const count = (feed.data?.items ?? []).filter((item) => isLowStock(item)).length;
-  return <>{children(count)}</>;
+  const { lowItems } = useFeedAvailability(farmId);
+  return <>{children(lowItems.length)}</>;
 }
 
 function WithLowFeedCount({ children }: { children: (count: number) => ReactNode }) {
@@ -51,7 +49,13 @@ function Sheet({
                 <span aria-hidden className="nav-icon" style={{ background: item.color }}>
                   <item.icon />
                 </span>
-                {item.label}
+                {item.hint ? (
+                  <span className="flex min-w-0 flex-col py-1.5 leading-tight">
+                    <span>{item.label}</span> <span className="text-[13px] font-normal text-ink-secondary">{item.hint}</span>
+                  </span>
+                ) : (
+                  item.label
+                )}
               </NavLink>
             </li>
           ))}

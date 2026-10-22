@@ -16,11 +16,13 @@ export const inventoryKeys = {
     ['inventory', 'items', farmId, category, { includeArchived }] as const,
   item: (id: string) => ['inventory', 'item', id] as const,
   movements: (itemId: string, page: number) => ['inventory', 'movements', itemId, page] as const,
+  allMovements: (itemId: string) => ['inventory', 'movements', itemId, 'all'] as const,
   ledger: (farmId: string, category: InventoryCategory | 'ALL') => ['inventory', 'ledger', farmId, category] as const,
 };
 
-export function useInventoryItems(farmId: string, category?: InventoryCategory, includeArchived = false) {
+export function useInventoryItems(farmId: string, category?: InventoryCategory, includeArchived = false, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: inventoryKeys.items(farmId, category ?? 'ALL', includeArchived),
     queryFn: () =>
       inventoryApi.listAllItems({
@@ -38,12 +40,22 @@ export function useInventoryItem(id: string) {
 
 export const MOVEMENTS_PAGE_SIZE = 20;
 
-export function useItemMovements(itemId: string, page: number) {
+export function useItemMovements(itemId: string, page: number, enabled = true) {
   return useQuery({
+    enabled: enabled && itemId !== '',
     queryKey: inventoryKeys.movements(itemId, page),
     queryFn: () => inventoryApi.listMovements(itemId, { page, limit: MOVEMENTS_PAGE_SIZE }),
     placeholderData: (previous) => previous,
   });
+}
+
+/**
+ * One item's whole history (newest first, up to 1 000 movements): the page
+ * filters it by kind (purchases, ration use, corrections) — the API has no
+ * type filter.
+ */
+export function useAllItemMovements(itemId: string) {
+  return useQuery({ queryKey: inventoryKeys.allMovements(itemId), queryFn: () => inventoryApi.listAllMovements(itemId) });
 }
 
 export interface LedgerMovement extends StockMovement {

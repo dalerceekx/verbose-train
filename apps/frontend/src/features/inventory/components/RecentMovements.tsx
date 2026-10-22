@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { formatDateTime, formatMoney } from '@/shared/lib/format';
 import { Decimal } from '@/shared/lib/decimal';
 import { cn } from '@/shared/lib/cn';
-import { formatQuantity, isIncoming, MOVEMENT_LABELS } from '../lib/labels';
+import { formatQuantity, isIncoming, MOVEMENT_KIND_LABELS, movementKind } from '../lib/labels';
 import type { LedgerMovement } from '../model/inventory.queries';
 
 export function itemPath(movement: Pick<LedgerMovement, 'item'>): string {
@@ -38,7 +38,7 @@ export function RecentMovements({ movements }: { movements: LedgerMovement[] }) 
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium text-ink">{movement.item.name}</span>
                 <span className="block text-[13px] text-ink-secondary">
-                  {MOVEMENT_LABELS[movement.type]} · {formatDateTime(movement.createdAt)}
+                  {MOVEMENT_KIND_LABELS[movementKind(movement)]} · {formatDateTime(movement.createdAt)}
                 </span>
               </span>
               <span className="text-right">

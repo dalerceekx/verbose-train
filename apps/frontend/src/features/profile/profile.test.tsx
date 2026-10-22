@@ -51,7 +51,7 @@ describe('profile', () => {
 
   it('is honest about email: no fake verification, just the unavailable state', async () => {
     renderApp('/profile/email');
-    expect(await screen.findByText('Email qo‘shish va tasdiqlash hali backend’da mavjud emas')).toBeInTheDocument();
+    expect(await screen.findByText('Email qo‘shish va tasdiqlash — tez orada')).toBeInTheDocument();
     expect(screen.getByText('Ulangan')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Kod yuborish/ })).not.toBeInTheDocument();
   });

@@ -1,22 +1,37 @@
+import { useQueries } from '@tanstack/react-query';
 import { CalendarCheck, CheckCircle2, ChevronLeft, ChevronRight, Wheat } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import type { Farm } from '@/features/farms/api/farms.api';
 import { formatQuantity } from '@/features/inventory/lib/labels';
+import { queuedIssueFor, useOfflineQueue } from '@/features/offline/queue';
 import { cn } from '@/shared/lib/cn';
 import { formatDate, formatDateTime, formatInteger } from '@/shared/lib/format';
 import { todayInTashkent } from '@/shared/lib/dates';
 import { Decimal } from '@/shared/lib/decimal';
 import { AsyncContent, Badge, Button, ButtonLink, Card, CardHeader, EmptyState, IconButton, Skeleton } from '@/shared/ui';
 import type { Ration } from '../api/rations.api';
-import { dailyStatus } from '../lib/daily';
+import { coverageFromIssues, dailyStatus, type DailyStatus } from '../lib/daily';
 import { summarizeRation } from '../lib/ration-math';
-import { useRations } from '../model/rations.queries';
-import { IssueRationDialog } from './IssueRationDialog';
+import { issuesQuery, useRations } from '../model/rations.queries';
+import { ISSUE_ACTION_LABEL, IssueRationDialog } from './IssueRationDialog';
 
-function Slide({ ration, today, onConfirm }: { ration: Ration; today: string; onConfirm: () => void }) {
-  const status = dailyStatus(ration, today);
+function Slide({
+  ration,
+  status,
+  today,
+  queued,
+  onConfirm,
+}: {
+  ration: Ration;
+  status: DailyStatus;
+  today: string;
+  /** "Berildi" pressed offline, waiting in the queue — not saved yet. */
+  queued: boolean;
+  onConfirm: () => void;
+}) {
   const enough = summarizeRation({ ...ration, days: 1 }).sufficient;
+  const archived = ration.items.filter((line) => line.item.archivedAt !== null);
   const perDay = ration.items
     .map((line) => {
       const amount = Decimal.from(line.dailyPerAnimal).mul(Decimal.from(ration.animalCount));
@@ -50,12 +65,21 @@ function Slide({ ration, today, onConfirm }: { ration: Ration; today: string; on
               ? `Berildi · ${formatDate(status.coveredUntil)} gacha`
               : `Bugun berildi · ${formatDateTime(status.issuedAt).split(' ').pop() ?? ''}`}
           </Badge>
+        ) : queued ? (
+          <Badge tone="warning">Navbatda — internet kutilmoqda (hali saqlanmagan)</Badge>
+        ) : archived.length > 0 ? (
+          <Badge tone="danger">Yem arxivlangan: {archived.map((line) => line.item.name).join(', ')}</Badge>
         ) : (
           <Badge tone={enough ? 'warning' : 'danger'}>{enough ? 'Hali berilmagan' : 'Omborda yetmaydi'}</Badge>
         )}
-        {status.given ? null : (
-          <Button size="sm" icon={<CalendarCheck aria-hidden className="size-4" />} disabled={!enough} onClick={onConfirm}>
-            Berildi — tasdiqlash
+        {status.given || queued ? null : (
+          <Button
+            size="sm"
+            icon={<CalendarCheck aria-hidden className="size-4" />}
+            disabled={!enough || archived.length > 0}
+            onClick={onConfirm}
+          >
+            {ISSUE_ACTION_LABEL}
           </Button>
         )}
       </div>
@@ -66,7 +90,8 @@ function Slide({ ration, today, onConfirm }: { ration: Ration; today: string; on
 /**
  * Dashboard's daily report: one slide per saved ration showing whether
  * today's feeding was given. "Berildi" is confirmed by issuing one day of
- * the ration from the warehouse — the issue is the record.
+ * the ration from the warehouse — the issue is the record. A ration counts
+ * as given while any of its issues covers today (not only the latest one).
  */
 export function TodayRations({ farm }: { farm: Farm }) {
   const rations = useRations(farm.id);
@@ -77,7 +102,14 @@ export function TodayRations({ farm }: { farm: Farm }) {
   const [confirming, setConfirming] = useState<Ration | null>(null);
 
   const list = rations.data?.items ?? [];
-  const given = list.filter((ration) => dailyStatus(ration, today).given).length;
+  const queue = useOfflineQueue((state) => state.ops);
+  const histories = useQueries({ queries: list.map((ration) => issuesQuery(ration.id)) });
+  // While a history is loading (or failed) the ration's latest issue decides.
+  const statusOf = (ration: Ration, index: number): DailyStatus => {
+    const issues = histories[index]?.data;
+    return issues ? coverageFromIssues(issues.items, today) : dailyStatus(ration, today);
+  };
+  const given = list.filter((ration, index) => statusOf(ration, index).given).length;
 
   function slideWidth(): number {
     const first = trackRef.current?.firstElementChild as HTMLElement | null;
@@ -160,7 +192,13 @@ export function TodayRations({ farm }: { farm: Farm }) {
                   aria-label={`${index + 1} / ${list.length}: ${ration.name}`}
                   className="w-[86%] shrink-0 snap-start sm:w-[calc(50%-6px)] xl:w-[calc(33.333%-8px)]"
                 >
-                  <Slide ration={ration} today={today} onConfirm={() => setConfirming(ration)} />
+                  <Slide
+                    ration={ration}
+                    status={statusOf(ration, index)}
+                    today={today}
+                    queued={queuedIssueFor(queue, ration.id) !== undefined}
+                    onConfirm={() => setConfirming(ration)}
+                  />
                 </li>
               ))}
             </ul>

@@ -96,7 +96,11 @@ export function medicinesInTreatment(lines: DiseaseDetails['lines']): TreatmentM
     .map((entry) => entry.medicine);
 }
 
-export type StockState = 'available' | 'expired' | 'empty' | 'missing';
+/**
+ * `similar`: the farm has an item whose name only looks like the medicine
+ * (another strength or product is possible) — never reported as "Bor".
+ */
+export type StockState = 'available' | 'similar' | 'expired' | 'empty' | 'missing';
 
 export interface MedicineStock {
   medicine: TreatmentMedicine;
@@ -105,21 +109,42 @@ export interface MedicineStock {
   items: InventoryItem[];
 }
 
+/** An approved entry of the medicine catalog. */
+export interface CatalogMedicine {
+  id: string;
+  name: string;
+}
+
 function hasStock(item: InventoryItem): boolean {
   const quantity = Decimal.parse(item.quantity);
   return quantity !== null && !quantity.isZero() && !quantity.isNegative();
 }
 
 /**
- * Whether the farm's pharmacy has `medicine`: a non-archived item whose name
- * names it, in stock and not past its expiry date (`today`: YYYY-MM-DD).
+ * Whether the farm's pharmacy has `medicine` — confirmed only through the
+ * catalog: a non-archived stock item linked (medicineId) to the approved
+ * catalog entry that is exactly this medicine, in stock and not past its
+ * expiry date (`today`: YYYY-MM-DD). An item that merely has a similar name
+ * — unlinked, or linked to another catalog entry — is "similar": the farmer
+ * checks it with the vet. The scheme text itself has no catalog ids, so the
+ * catalog entry is found by its exact name.
  */
-export function stockFor(medicine: TreatmentMedicine, items: readonly InventoryItem[], today: string): MedicineStock {
-  const named = items.filter((item) => !item.archivedAt && firstMatch(normalizeName(item.name), medicine) !== -1);
-  const inStock = named.filter(hasStock);
+export function stockFor(
+  medicine: TreatmentMedicine,
+  items: readonly InventoryItem[],
+  today: string,
+  catalog: readonly CatalogMedicine[] = [],
+): MedicineStock {
+  const wanted = normalizeName(medicine.name);
+  const catalogIds = new Set(catalog.filter((entry) => normalizeName(entry.name) === wanted).map((entry) => entry.id));
+  const active = items.filter((item) => !item.archivedAt);
+  const linked = active.filter((item) => item.medicineId !== null && catalogIds.has(item.medicineId));
+  const inStock = linked.filter(hasStock);
   const usable = inStock.filter((item) => !item.expiresOn || item.expiresOn >= today);
   if (usable.length > 0) return { medicine, state: 'available', items: usable };
   if (inStock.length > 0) return { medicine, state: 'expired', items: inStock };
-  if (named.length > 0) return { medicine, state: 'empty', items: named };
+  if (linked.length > 0) return { medicine, state: 'empty', items: linked };
+  const named = active.filter((item) => firstMatch(normalizeName(item.name), medicine) !== -1);
+  if (named.length > 0) return { medicine, state: 'similar', items: named };
   return { medicine, state: 'missing', items: [] };
 }

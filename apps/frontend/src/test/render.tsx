@@ -6,8 +6,10 @@ import { AuthBootstrap } from '@/app/providers/AuthBootstrap';
 import { routes } from '@/app/router/routes';
 import { useSessionStore } from '@/features/auth/model/session.store';
 import { useActiveFarmStore } from '@/features/farms/model/active-farm';
+import { useOfflineQueue } from '@/features/offline/queue';
 import { http } from '@/shared/api/client';
 import { accessTokenStore } from '@/shared/api/token-store';
+import { useNetworkStore } from '@/shared/network/network-status';
 import { Toaster, useToastStore } from '@/shared/ui/toast';
 import { createMockAdapter } from '@/mocks/adapter';
 import { createSeedDb, MOCK_MFA_CODE, type MockDb } from '@/mocks/db';
@@ -44,6 +46,8 @@ export function resetClientState(): void {
   useSessionStore.setState({ status: 'initializing', mfaChallenge: null, notice: null, endReason: null });
   useActiveFarmStore.setState({ byUser: {} });
   useToastStore.setState({ toasts: [] });
+  useOfflineQueue.setState({ userId: null, ops: [] });
+  useNetworkStore.setState({ online: true, lastResponseAt: null, unreachable: false, restoredAt: null });
   window.localStorage.clear();
 }
 
@@ -64,7 +68,8 @@ export function signIn(api: TestApi, phone: string, password: string): void {
 
 export function renderApp(path: string) {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false } },
+    // Same mutation behaviour as the app (createQueryClient): offline fails at once.
+    defaultOptions: { queries: { retry: false, staleTime: Infinity }, mutations: { retry: false, networkMode: 'always' } },
   });
   const router = createMemoryRouter(routes, { initialEntries: [path] });
   const user = userEvent.setup();

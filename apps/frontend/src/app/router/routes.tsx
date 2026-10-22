@@ -12,7 +12,7 @@ import {
   ProfilePasswordPage,
   ProfileSecurityPage,
 } from '@/pages/profile/ProfilePages';
-import { PageLoader } from '@/shared/ui';
+import { AppShellSkeleton } from '@/shared/ui';
 import { AppLayout } from '../layouts/AppLayout';
 import { NotFoundPage, RouteError } from './RouteError';
 
@@ -23,19 +23,11 @@ function page(load: () => Promise<PageModule>): Pick<RouteObject, 'lazy'> {
   return { lazy: async () => ({ Component: (await load()).default }) };
 }
 
-/** Shown while the first code-split page loads (a deep link or a reload). */
-function InitialPageLoader() {
-  return (
-    <div className="flex min-h-dvh items-center justify-center bg-background p-4">
-      <PageLoader />
-    </div>
-  );
-}
-
 export const routes: RouteObject[] = [
   {
     errorElement: <RouteError />,
-    hydrateFallbackElement: <InitialPageLoader />,
+    // The first code-split page loads (a deep link or a reload): the outline of the app, not a blank page.
+    hydrateFallbackElement: <AppShellSkeleton />,
     children: [
       {
         element: <GuestOnly />,
@@ -148,7 +140,7 @@ export const routes: RouteObject[] = [
                       },
                       {
                         path: '/diseases',
-                        handle: { title: 'Molim kasal', description: 'Kasalliklar ma’lumotnomasi — manba matni' },
+                        handle: { title: 'Molim kasal', description: 'Hayvonim kasal: kasalliklar ma’lumotnomasi — manba matni' },
                         ...page(() => import('@/pages/farmer/DiseasesPage')),
                       },
                       {
@@ -172,7 +164,7 @@ export const routes: RouteObject[] = [
                   { path: '/expenses', element: <Navigate to="/dashboard#xarajatlar" replace /> },
                   {
                     path: '/reports',
-                    handle: { title: 'Hisobotlar', description: 'Backend ma’lumotlari asosidagi hisobotlar' },
+                    handle: { title: 'Hisobotlar', description: 'Fermangiz bo‘yicha hisobotlar' },
                     ...page(() => import('@/pages/farmer/ReportsPage')),
                   },
                   {

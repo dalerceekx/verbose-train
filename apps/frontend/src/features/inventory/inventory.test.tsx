@@ -16,7 +16,10 @@ afterEach(() => resetClientState());
 const arpa = () => api.server.db.items.find((item) => item.name === 'Arpa');
 const movementPosts = () => api.requests.filter((request) => request.method === 'POST' && request.path.endsWith('/movements'));
 
-async function openItemDialog(view: ReturnType<typeof renderApp>, action: 'Xarid' | 'Sarflash') {
+async function openItemDialog(
+  view: ReturnType<typeof renderApp>,
+  action: 'Xarid' | 'Kirim (xaridsiz)' | 'Sarf' | 'Inventarizatsiya',
+) {
   await view.user.click(await screen.findByRole('button', { name: action }));
   return screen.findByRole('dialog');
 }
@@ -53,37 +56,37 @@ describe('feed inventory', () => {
 
   it('blocks consumption above the balance before calling the API', async () => {
     const view = renderApp(`/feed/${arpa()?.id ?? ''}`);
-    const dialog = await openItemDialog(view, 'Sarflash');
+    const dialog = await openItemDialog(view, 'Sarf');
     await view.user.type(within(dialog).getByLabelText(/Miqdor/), '5000');
     expect(within(dialog).getByText('Bu miqdor ombordagi qoldiqdan ko‘p.')).toBeInTheDocument();
-    await view.user.click(within(dialog).getByRole('button', { name: 'Chiqimni saqlash' }));
+    await view.user.click(within(dialog).getByRole('button', { name: 'Sarfni saqlash' }));
     expect(await within(dialog).findByText('Omborda faqat 1 250 kg bor')).toBeInTheDocument();
     expect(movementPosts()).toHaveLength(0);
   });
 
   it('shows the server INSUFFICIENT_STOCK answer when stock changed meanwhile', async () => {
     const view = renderApp(`/feed/${arpa()?.id ?? ''}`);
-    const dialog = await openItemDialog(view, 'Sarflash');
+    const dialog = await openItemDialog(view, 'Sarf');
     // Another device consumed most of the stock after the page loaded.
     const item = arpa();
     if (item) item.quantity = '100.000';
     await view.user.type(within(dialog).getByLabelText(/Miqdor/), '200');
-    await view.user.click(within(dialog).getByRole('button', { name: 'Chiqimni saqlash' }));
+    await view.user.click(within(dialog).getByRole('button', { name: 'Sarfni saqlash' }));
     expect(await within(dialog).findByText('Omborda yetarli emas: 100 kg bor')).toBeInTheDocument();
     expect(movementPosts()[0]?.status).toBe(409);
   });
 
   it('reuses the same Idempotency-Key when the same submission is retried', async () => {
     const view = renderApp(`/feed/${arpa()?.id ?? ''}`);
-    const dialog = await openItemDialog(view, 'Sarflash');
+    const dialog = await openItemDialog(view, 'Sarf');
     const item = arpa();
     if (item) item.quantity = '10.000';
     await view.user.type(within(dialog).getByLabelText(/Miqdor/), '20');
-    await view.user.click(within(dialog).getByRole('button', { name: 'Chiqimni saqlash' }));
+    await view.user.click(within(dialog).getByRole('button', { name: 'Sarfni saqlash' }));
     await within(dialog).findByText(/Omborda yetarli emas/);
     await view.user.clear(within(dialog).getByLabelText(/Miqdor/));
     await view.user.type(within(dialog).getByLabelText(/Miqdor/), '5');
-    await view.user.click(within(dialog).getByRole('button', { name: 'Chiqimni saqlash' }));
+    await view.user.click(within(dialog).getByRole('button', { name: 'Sarfni saqlash' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const keys = movementPosts().map((request) => request.headers['idempotency-key']);
     expect(keys).toHaveLength(2);
@@ -100,7 +103,9 @@ describe('feed warehouse management', () => {
     // 1 250 × 3 400 + 3 400 × 1 500 + 600 × 2 500 + 120 × 4 800.
     expect(await within(stats).findByText('11 426 000 so‘m')).toBeInTheDocument();
     expect(screen.getByText('1 ta yem kam qoldi')).toBeInTheDocument();
-    expect(screen.getByText(/^Omuxta yem:/, { selector: 'li' })).toHaveTextContent('Omuxta yem: 120 kg (minimal 200 kg)');
+    const low = screen.getByText(/^Omuxta yem:/, { selector: 'li' });
+    expect(low).toHaveTextContent(/^Omuxta yem: 120 kg — /);
+    expect(low).toHaveTextContent('minimal 200 kg');
     const row = screen.getByRole('cell', { name: 'Omuxta yem' }).closest('tr') as HTMLElement;
     expect(within(row).getByText('Kam qoldi')).toBeInTheDocument();
   });
@@ -158,12 +163,19 @@ describe('feed warehouse management', () => {
     expect(dialog).toBeInTheDocument();
   });
 
-  it('deletes (archives) a feed only after confirmation', async () => {
+  it('archives a feed with stock only after the farmer confirms what happens to it', async () => {
     const view = renderApp('/feed');
-    await view.user.click(await screen.findByRole('button', { name: 'Kepak: o‘chirish' }));
-    const confirm = await screen.findByRole('dialog', { name: '“Kepak”ni o‘chirish' });
+    await view.user.click(await screen.findByRole('button', { name: 'Kepak: arxivlash' }));
+    const confirm = await screen.findByRole('dialog', { name: '“Kepak”ni arxivlash' });
+    // The stock left is named, and it is not written off silently.
+    expect(within(confirm).getByText('Omborda 600 kg bor')).toBeInTheDocument();
+    expect(within(confirm).getByText(/yo‘qotish yoki sarf sifatida yozilmaydi/)).toBeInTheDocument();
+    const submit = within(confirm).getByRole('button', { name: 'Arxivlash' });
+    expect(submit).toBeDisabled();
+    await view.user.click(submit);
     expect(api.requests.some((request) => request.path.endsWith('/archive'))).toBe(false);
-    await view.user.click(within(confirm).getByRole('button', { name: 'O‘chirish' }));
+    await view.user.click(within(confirm).getByRole('checkbox', { name: 'Tushundim, baribir arxivlash' }));
+    await view.user.click(submit);
     await waitFor(() => expect(screen.queryByRole('cell', { name: 'Kepak' })).not.toBeInTheDocument());
     expect(api.server.db.items.find((item) => item.name === 'Kepak')?.archivedAt).not.toBeNull();
   });

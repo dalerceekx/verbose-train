@@ -9,6 +9,7 @@ import type { Farm } from '@/features/farms/api/farms.api';
 import type { InventoryItem, StockMovement } from '@/features/inventory/api/inventory.api';
 import type { Medicine } from '@/features/medicines/api/medicines.api';
 import type { AnimalType, Ration, RationIssue } from '@/features/rations/api/rations.api';
+import type { Recommendation, Treatment } from '@/features/treatments/api/treatments.api';
 import type { PublicUser, UserRole } from '@/shared/types/api';
 
 /** Stored ration: items without the joined inventory data (the server joins on read). */
@@ -63,6 +64,9 @@ export interface MockDb {
   rations: MockRation[];
   rationIssues: MockRationIssue[];
   medicines: Medicine[];
+  /** Approved, non-emergency protocol versions (GET /vet/recommendations); tests add their own. */
+  recommendations?: Recommendation[];
+  treatments?: Treatment[];
   auditLogs: AuditLog[];
   idempotency: Record<string, { hash: string; status: number; body: unknown }>;
   /** GET /auth/methods. Mock Google accepts credentials "mock-google:<email>". */

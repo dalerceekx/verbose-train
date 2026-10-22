@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 
-export type SessionStatus = 'initializing' | 'authenticated' | 'anonymous' | 'unreachable';
+/**
+ * `offline`: the session could not be checked (no connection) and the last
+ * farmer's offline copy is shown read-only; nothing is sent until the session
+ * is restored online.
+ */
+export type SessionStatus = 'initializing' | 'authenticated' | 'anonymous' | 'unreachable' | 'offline';
 
 export interface MfaChallenge {
   kind: 'MFA_REQUIRED' | 'MFA_SETUP_REQUIRED';

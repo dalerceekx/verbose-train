@@ -3,7 +3,9 @@ import { Outlet } from 'react-router';
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser';
 import { useSessionStore } from '@/features/auth/model/session.store';
 import { GuestActionGuard, GuestNotice } from '@/features/guest/GuestShell';
+import { ConnectionBanner, OfflineQueueRunner } from '@/features/offline/OfflineQueue';
 import { env } from '@/shared/config/env';
+import { UnsavedChangesGuard } from '@/shared/drafts/UnsavedChangesGuard';
 import { Alert } from '@/shared/ui';
 import { Header, useRouteHandle } from '@/widgets/header/Header';
 import { TabBar } from '@/widgets/tab-bar/TabBar';
@@ -45,8 +47,16 @@ export function AppLayout() {
       >
         Asosiy mazmunga o‘tish
       </a>
-      {guest ? <GuestActionGuard /> : null}
+      {guest ? (
+        <GuestActionGuard />
+      ) : (
+        <>
+          <UnsavedChangesGuard />
+          <OfflineQueueRunner />
+        </>
+      )}
       <Header user={user} guest={guest} />
+      <ConnectionBanner />
       <main
         id="main-content"
         tabIndex={-1}

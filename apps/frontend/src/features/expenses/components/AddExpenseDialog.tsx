@@ -26,8 +26,8 @@ export function AddExpenseDialog({ farm, onClose }: { farm: Farm; onClose: () =>
       open
       onClose={onClose}
       size="sm"
-      title="Xarajat qo‘shish"
-      description="Xarid omborga narxi bilan kiritiladi va xarajatlar ro‘yxatida avtomatik ko‘rinadi."
+      title="Xarid qo‘shish"
+      description="Xarid omborga narxi bilan kiritiladi va xarajatlar ro‘yxatida avtomatik ko‘rinadi. Transport, ish haqi kabi xarajatlar tez orada qo‘shiladi."
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

@@ -6,6 +6,7 @@ import { cn } from '@/shared/lib/cn';
 import { Alert, AsyncContent, Badge, Button, ButtonLink, Card, CardBody, EmptyState, Field, Input, Select } from '@/shared/ui';
 import { DISEASE_ANIMALS, type DiseaseSummary } from '../api/diseases.api';
 import { ANIMAL_LABELS } from '../lib/labels';
+import { isEmergency, isSchemeApproved } from '../lib/safety';
 import { useDiseaseGroups, useDiseases } from '../model/diseases.queries';
 
 function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: string }) {
@@ -40,6 +41,8 @@ function DiseaseRow({ disease, back }: { disease: DiseaseSummary; back: string }
             <span className="mt-0.5 block text-[13px] text-ink-secondary">{disease.scientificNames}</span>
           ) : null}
           <span className="mt-2 flex flex-wrap gap-1.5">
+            {isEmergency(disease) ? <Badge tone="danger">Shoshilinch</Badge> : null}
+            {isSchemeApproved(disease) ? null : <Badge tone="warning">Tasdiqlanmagan</Badge>}
             {disease.animals.map((animal) => (
               <Badge key={animal} tone="neutral">
                 {ANIMAL_LABELS[animal]}

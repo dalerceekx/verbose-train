@@ -84,7 +84,7 @@ describe('error normalization', () => {
   it('maps a missing response to a network error', () => {
     const error = toApiError(axiosError(null));
     expect(error.isNetworkError).toBe(true);
-    expect(error.message).toMatch(/aloqa/);
+    expect(error.message).toMatch(/aloqa/i);
   });
 
   it('keeps the backend Uzbek message and request id', () => {

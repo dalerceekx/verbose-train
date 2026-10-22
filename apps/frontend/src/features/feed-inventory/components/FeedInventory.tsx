@@ -1,15 +1,29 @@
-import { Calculator, Coins, History, Minus, Package, Pencil, Plus, Trash2, TriangleAlert, Warehouse } from 'lucide-react';
+import {
+  Archive,
+  Calculator,
+  Coins,
+  History,
+  Minus,
+  Package,
+  Pencil,
+  Plus,
+  ShoppingCart,
+  TriangleAlert,
+  Warehouse,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { Farm } from '@/features/farms/api/farms.api';
 import type { InventoryItem } from '@/features/inventory/api/inventory.api';
+import { ArchiveItemDialog } from '@/features/inventory/components/ArchiveItemDialog';
 import { ItemFormDialog } from '@/features/inventory/components/ItemFormDialog';
-import { MovementDialog, type MovementIntent } from '@/features/inventory/components/MovementDialog';
+import { INTENT_BUTTON_LABELS, MovementDialog, type MovementIntent } from '@/features/inventory/components/MovementDialog';
 import { RecentMovements } from '@/features/inventory/components/RecentMovements';
 import { formatQuantity, UNIT_SHORT } from '@/features/inventory/lib/labels';
-import { formatTotals, isLowStock, stockValue, totalsByUnit } from '@/features/inventory/lib/stock-math';
-import { useArchiveItem, useInventoryItems, useLedger } from '@/features/inventory/model/inventory.queries';
-import { errorMessage } from '@/shared/api/errors';
+import { formatTotals, stockValue, totalsByUnit } from '@/features/inventory/lib/stock-math';
+import { useLedger } from '@/features/inventory/model/inventory.queries';
+import { FEED_STATUS_LABELS, LOW_STOCK_DAYS, type FeedAvailability } from '@/features/rations/lib/feed-availability';
+import { useFeedAvailability } from '@/features/rations/model/useFeedAvailability';
 import { Decimal } from '@/shared/lib/decimal';
 import { formatInteger, formatMoney } from '@/shared/lib/format';
 import {
@@ -20,14 +34,14 @@ import {
   ButtonLink,
   Card,
   CardHeader,
-  ConfirmDialog,
   DataTable,
   EmptyState,
   ErrorState,
   IconButton,
+  OfflineState,
+  queryLoadState,
   Skeleton,
   StatCard,
-  toast,
   type Column,
 } from '@/shared/ui';
 
@@ -35,28 +49,41 @@ const RECENT_LIMIT = 8;
 
 const isEmpty = (item: InventoryItem) => Decimal.parse(item.quantity)?.isZero() ?? true;
 
-function StockBadge({ item }: { item: InventoryItem }) {
-  if (isEmpty(item)) return <Badge tone="danger">Tugagan</Badge>;
-  if (isLowStock(item)) return <Badge tone="warning">Kam qoldi</Badge>;
-  return <Badge tone="success">Yetarli</Badge>;
+const STATUS_TONES = { empty: 'danger', low: 'warning', ok: 'success' } as const;
+
+function StockBadge({ availability }: { availability: FeedAvailability }) {
+  return <Badge tone={STATUS_TONES[availability.status]}>{FEED_STATUS_LABELS[availability.status]}</Badge>;
+}
+
+/** Why a feed is low, in the farmer's words. */
+function lowReason(item: InventoryItem, availability: FeedAvailability): string {
+  const parts: string[] = [];
+  if (availability.runsOutSoon && availability.daysCovered) {
+    parts.push(
+      `${formatInteger(availability.daysCovered.toNumber())} kunga yetadi (${availability.demands.map((demand) => demand.rationName).join(', ')})`,
+    );
+  }
+  if (availability.belowMinimum && item.minQuantity) parts.push(`minimal ${formatQuantity(item.minQuantity, item.unit)}`);
+  return parts.length > 0 ? ` — ${parts.join('; ')}` : '';
 }
 
 /**
- * "Yem — omborni boshqarish": every feed with its balance, unit price and
- * value; intake, consumption, edit and delete (archive) with confirmation;
- * low-stock warnings from the farmer's minimums.
+ * "Yem — omborni boshqarish": every feed with its balance, how many days it
+ * lasts for the saved rations, unit price and value; purchase, intake (no
+ * purchase), consumption, edit and archive with confirmation.
  */
 export function FeedInventory({ farm }: { farm: Farm }) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const items = useInventoryItems(farm.id, 'FEED');
+  const feed = useFeedAvailability(farm.id);
+  const items = feed.items;
   const feedItems = useMemo(() => items.data?.items ?? [], [items.data]);
   const ledger = useLedger(farm.id, 'FEED');
-  const archive = useArchiveItem();
   const [movement, setMovement] = useState<{ item: InventoryItem; intent: MovementIntent } | null>(null);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
-  const [removing, setRemoving] = useState<InventoryItem | null>(null);
+  const [archiving, setArchiving] = useState<InventoryItem | null>(null);
   const creating = params.get('new') === '1';
+  const itemsState = queryLoadState(items);
 
   function setCreating(open: boolean): void {
     setParams((current) => {
@@ -67,7 +94,6 @@ export function FeedInventory({ farm }: { farm: Farm }) {
     });
   }
 
-  const lowItems = feedItems.filter((item) => isLowStock(item));
   let totalValue = Decimal.ZERO;
   let unpriced = 0;
   for (const item of feedItems) {
@@ -79,6 +105,15 @@ export function FeedInventory({ farm }: { farm: Farm }) {
   const columns: Column<InventoryItem>[] = [
     { key: 'name', header: 'Yem nomi', cell: (item) => <span className="font-semibold">{item.name}</span> },
     { key: 'quantity', header: 'Miqdori', align: 'right', cell: (item) => formatQuantity(item.quantity, item.unit) },
+    {
+      key: 'days',
+      header: 'Necha kunga',
+      align: 'right',
+      cell: (item) => {
+        const days = feed.of(item).daysCovered;
+        return days ? `${formatInteger(days.toNumber())} kun` : '—';
+      },
+    },
     {
       key: 'price',
       header: '1 kg narxi',
@@ -94,7 +129,7 @@ export function FeedInventory({ farm }: { farm: Farm }) {
         return value ? formatMoney(value) : '—';
       },
     },
-    { key: 'status', header: 'Holat', cell: (item) => <StockBadge item={item} /> },
+    { key: 'status', header: 'Holat', cell: (item) => <StockBadge availability={feed.of(item)} /> },
     {
       key: 'actions',
       header: <span className="sr-only">Amallar</span>,
@@ -104,10 +139,18 @@ export function FeedInventory({ farm }: { farm: Farm }) {
         <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
           <Button
             size="sm"
-            icon={<Plus aria-hidden className="size-4" />}
+            icon={<ShoppingCart aria-hidden className="size-4" />}
             onClick={() => setMovement({ item, intent: 'purchase' })}
           >
-            Kirim
+            {INTENT_BUTTON_LABELS.purchase}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Plus aria-hidden className="size-4" />}
+            onClick={() => setMovement({ item, intent: 'intake' })}
+          >
+            {INTENT_BUTTON_LABELS.intake}
           </Button>
           <Button
             size="sm"
@@ -116,7 +159,7 @@ export function FeedInventory({ farm }: { farm: Farm }) {
             onClick={() => setMovement({ item, intent: 'consumption' })}
             disabled={isEmpty(item)}
           >
-            Sarf
+            {INTENT_BUTTON_LABELS.consumption}
           </Button>
           <IconButton
             label={`${item.name}: tahrirlash`}
@@ -124,9 +167,9 @@ export function FeedInventory({ farm }: { farm: Farm }) {
             onClick={() => setEditing(item)}
           />
           <IconButton
-            label={`${item.name}: o‘chirish`}
-            icon={<Trash2 aria-hidden className="size-4" />}
-            onClick={() => setRemoving(item)}
+            label={`${item.name}: arxivlash`}
+            icon={<Archive aria-hidden className="size-4" />}
+            onClick={() => setArchiving(item)}
           />
         </div>
       ),
@@ -142,43 +185,40 @@ export function FeedInventory({ farm }: { farm: Farm }) {
           icon={<Package className="size-5" />}
           label="Yem turlari"
           value={formatInteger(feedItems.length)}
-          loading={items.isPending}
-          failed={items.isError}
+          {...itemsState}
         />
         <StatCard
           compact
           icon={<Warehouse className="size-5" />}
           label="Umumiy qoldiq"
           value={formatTotals(totalsByUnit(feedItems))}
-          loading={items.isPending}
-          failed={items.isError}
+          {...itemsState}
         />
         <StatCard
           compact
           icon={<Coins className="size-5" />}
           label="Ombor qiymati"
           value={formatMoney(totalValue)}
-          secondary={unpriced > 0 ? `${unpriced} ta narxsiz` : undefined}
-          loading={items.isPending}
-          failed={items.isError}
+          secondary={unpriced > 0 ? `Oxirgi xarid narxida · ${unpriced} ta narxsiz` : 'Oxirgi xarid narxida'}
+          {...itemsState}
         />
         <StatCard
           compact
           icon={<TriangleAlert className="size-5" />}
           label="Kam qolgan yemlar"
-          value={formatInteger(lowItems.length)}
-          loading={items.isPending}
-          failed={items.isError}
+          value={formatInteger(feed.lowItems.length)}
+          secondary={feed.daysKnown ? `${LOW_STOCK_DAYS} kundan kam yoki minimaldan past` : 'Minimal qoldiq bo‘yicha'}
+          {...itemsState}
         />
       </section>
 
-      {lowItems.length > 0 ? (
-        <Alert tone="warning" title={`${lowItems.length} ta yem kam qoldi`}>
+      {feed.lowItems.length > 0 ? (
+        <Alert tone="warning" title={`${feed.lowItems.length} ta yem kam qoldi`}>
           <ul className="mt-1 flex flex-col gap-0.5">
-            {lowItems.map((item) => (
+            {feed.lowItems.map((item) => (
               <li key={item.id}>
                 {item.name}: <strong className="tabular">{formatQuantity(item.quantity, item.unit)}</strong>
-                {item.minQuantity ? ` (minimal ${formatQuantity(item.minQuantity, item.unit)})` : ''}
+                {isEmpty(item) ? ' — tugagan' : lowReason(item, feed.of(item))}
               </li>
             ))}
           </ul>
@@ -233,6 +273,8 @@ export function FeedInventory({ farm }: { farm: Farm }) {
         <CardHeader title="Yaqindagi ombor harakatlari" icon={<History className="size-5" />} />
         {ledger.isError ? (
           <ErrorState error={ledger.error} collection onRetry={() => void ledger.refetch()} />
+        ) : ledger.isPending && ledger.fetchStatus === 'paused' ? (
+          <OfflineState />
         ) : ledger.isPending ? (
           <div className="flex flex-col gap-3 p-5">
             <Skeleton className="h-10" />
@@ -252,27 +294,18 @@ export function FeedInventory({ farm }: { farm: Farm }) {
         item={editing}
         onAdjustQuantity={() => editing && setMovement({ item: editing, intent: 'adjustment' })}
       />
-      {movement ? <MovementDialog item={movement.item} intent={movement.intent} onClose={() => setMovement(null)} /> : null}
-      <ConfirmDialog
-        open={removing !== null}
-        title={`“${removing?.name ?? ''}”ni o‘chirish`}
-        message="Yem ombor ro‘yxatidan olinadi. Kirim va sarf tarixi saqlanib qoladi."
-        confirmLabel="O‘chirish"
-        loading={archive.isPending}
-        error={archive.error ? errorMessage(archive.error) : null}
-        onCancel={() => {
-          setRemoving(null);
-          archive.reset();
-        }}
-        onConfirm={() => {
-          if (!removing || archive.isPending) return;
-          archive.mutate(removing.id, {
-            onSuccess: () => {
-              toast.success(`“${removing.name}” o‘chirildi`);
-              setRemoving(null);
-            },
-          });
-        }}
+      {movement ? (
+        <MovementDialog
+          item={movement.item}
+          intent={movement.intent}
+          onClose={() => setMovement(null)}
+          onSwitchIntent={(intent) => setMovement({ item: movement.item, intent })}
+        />
+      ) : null}
+      <ArchiveItemDialog
+        item={archiving}
+        onClose={() => setArchiving(null)}
+        onAdjust={() => archiving && setMovement({ item: archiving, intent: 'adjustment' })}
       />
     </div>
   );

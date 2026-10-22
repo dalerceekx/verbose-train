@@ -79,6 +79,11 @@ export interface RationIssue {
   movements: StockMovement[];
 }
 
+export interface IssueResult {
+  issue: RationIssue;
+  replayed: boolean;
+}
+
 export interface RationInput {
   animalTypeId: string;
   name: string;
@@ -159,14 +164,18 @@ export const rationsApi = {
     return data;
   },
 
-  /** Writes the real consumption (OUT movements); one Idempotency-Key per dialog session. */
-  async issue(id: string, days: number, idempotencyKey: string): Promise<RationIssue> {
-    const { data } = await http.post<RationIssue>(
+  /**
+   * Writes the real consumption (OUT movements); one Idempotency-Key per
+   * attempt. `replayed`: the server had already applied this key and only
+   * repeated its first answer (nothing was taken from stock again).
+   */
+  async issue(id: string, days: number, idempotencyKey: string): Promise<IssueResult> {
+    const { data, headers } = await http.post<RationIssue>(
       `/rations/${id}/issue`,
       { days },
       { headers: { 'Idempotency-Key': idempotencyKey } },
     );
-    return data;
+    return { issue: data, replayed: String(headers['idempotent-replayed'] ?? '') === 'true' };
   },
 
   async issues(id: string, query: PageQuery = {}): Promise<Paginated<RationIssue>> {

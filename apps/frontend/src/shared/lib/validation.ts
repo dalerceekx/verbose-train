@@ -37,21 +37,27 @@ export interface DecimalRule {
   /** Must be strictly greater than zero. */
   positive?: boolean;
   max?: string;
+  /** Message for 0 when `positive` (e.g. an optional field: "leave it empty or…"). */
+  zeroMessage?: string;
 }
+
+/** Message for an optional field that, when filled, must be above zero. */
+export const OPTIONAL_POSITIVE_MESSAGE = 'Bo‘sh qoldiring yoki 0 dan katta son kiriting';
 
 /** Validation message for a decimal input, or null when it is acceptable. */
 export function decimalProblem(
   value: string,
-  { maxIntegerDigits, maxFractionDigits, positive = false, max }: DecimalRule,
+  { maxIntegerDigits, maxFractionDigits, positive = false, max, zeroMessage }: DecimalRule,
 ): string | null {
+  const integer = maxFractionDigits === 0;
   const parsed = Decimal.parse(value);
-  if (!parsed || parsed.isNegative()) return 'Musbat son kiriting (masalan 12,5)';
+  if (!parsed || parsed.isNegative()) return integer ? 'Butun son kiriting (masalan 12)' : 'Musbat son kiriting (masalan 12,5)';
   if (parsed.significantScale() > maxFractionDigits) {
-    return maxFractionDigits === 0 ? 'Butun son kiriting' : `Verguldan keyin ko‘pi bilan ${maxFractionDigits} ta raqam`;
+    return integer ? 'Butun son kiriting (masalan 12)' : `Verguldan keyin ko‘pi bilan ${maxFractionDigits} ta raqam`;
   }
   const integerDigits = parsed.toString().split('.')[0] ?? '';
   if (integerDigits.length > maxIntegerDigits) return 'Qiymat juda katta';
-  if (positive && parsed.isZero()) return 'Qiymat noldan katta bo‘lsin';
+  if (positive && parsed.isZero()) return zeroMessage ?? 'Qiymat noldan katta bo‘lsin';
   if (max && parsed.gt(Decimal.from(max))) return `Qiymat ${max} dan oshmasin`;
   return null;
 }

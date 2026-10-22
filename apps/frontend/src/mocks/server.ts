@@ -12,6 +12,8 @@ import type { AuditLog } from '@/features/audit/api/audit.api';
 import type { InventoryItem, StockMovement } from '@/features/inventory/api/inventory.api';
 import type { Medicine } from '@/features/medicines/api/medicines.api';
 import type { AnimalType, ProfileConfig, Ration } from '@/features/rations/api/rations.api';
+import type { Recommendation, Treatment } from '@/features/treatments/api/treatments.api';
+import { addDays, todayInTashkent } from '@/shared/lib/dates';
 import { diseaseCatalog, normalizeSearch } from './diseases';
 import {
   createSeedDb,
@@ -1564,6 +1566,142 @@ route('POST', '/vet/medicines/:id/archive', MED_MANAGERS, (ctx) => {
   audit(ctx.db, ctx.user, 'medicine.archived', 'medicine', medicine.id, { status: previous }, { status: 'ARCHIVED' });
   return ok(medicine);
 });
+
+// --- vet treatments (approved protocols only, doses computed here) ---------
+
+const recommendationsOf = (db: MockDb): Recommendation[] => (db.recommendations ??= []);
+const treatmentsOf = (db: MockDb): Treatment[] => (db.treatments ??= []);
+
+route('GET', '/vet/recommendations', ['FARMER', 'VET'], (ctx) => {
+  const q = query(ctx, ['page', 'limit', 'species', 'condition', 'emergency']);
+  if (boolParam(q.emergency)) {
+    return ok({
+      emergency: true,
+      advice: 'Shoshilinch holat: darhol veterinar shifokorga murojaat qiling.',
+      protocols: [],
+      ...paginate([], q),
+    });
+  }
+  const condition = (q.condition ?? '').toLocaleLowerCase('uz');
+  const rows = recommendationsOf(ctx.db).filter(
+    (row) =>
+      (!q.species || row.species === q.species) && (!condition || row.condition.toLocaleLowerCase('uz').includes(condition)),
+  );
+  return ok({ emergency: false, advice: null, ...paginate(rows, q) });
+});
+
+route('GET', '/vet/treatments', FARMER, (ctx) => {
+  const q = query(ctx, ['page', 'limit', 'sort', 'animalId', 'status']);
+  const farms = ownedFarmIds(ctx);
+  const rows = treatmentsOf(ctx.db).filter(
+    (row) => farms.has(row.farmId) && (!q.animalId || row.animalId === q.animalId) && (!q.status || row.status === q.status),
+  );
+  return ok(paginate(sortBy(rows, q.sort, { startedAt: (row) => row.startedAt, endsOn: (row) => row.endsOn }, '-startedAt'), q));
+});
+
+route('POST', '/vet/treatments', FARMER, (ctx) => {
+  const key = ctx.req.headers['idempotency-key'];
+  if (!key) fail(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key sarlavhasi talab qilinadi');
+  const hash = canonical({ body: ctx.req.body });
+  const storeKey = `${ctx.user.id}:vet.treatment.create:${key}`;
+  const previous = ctx.db.idempotency[storeKey];
+  if (previous) {
+    if (previous.hash !== hash) fail(409, 'IDEMPOTENCY_KEY_REUSED', 'Bu kalit boshqa so‘rov uchun ishlatilgan');
+    return { status: previous.status, body: previous.body, headers: { 'idempotent-replayed': 'true' } };
+  }
+  const record = readBody(ctx, ['animalId', 'protocolVersionId', 'animalWeightKg', 'items', 'notes']);
+  const farms = ownedFarmIds(ctx);
+  const animal = ctx.db.animals.find((row) => row.id === record.animalId && farms.has(row.farmId) && !row.archivedAt);
+  if (!animal) notFound();
+  const version = recommendationsOf(ctx.db).find((row) => row.versionId === record.protocolVersionId);
+  if (!version) fail(422, 'PROTOCOL_NOT_APPROVED', 'Protokol topilmadi yoki tasdiqlanmagan');
+  if (version.species !== animal.species) fail(422, 'SPECIES_MISMATCH', 'Protokol bu hayvon turiga mos emas');
+  const weight = decimalField(record, 'animalWeightKg', 2) ?? Decimal.parse(animal.weightKg);
+  if (!weight || weight.isZero()) fail(422, 'WEIGHT_REQUIRED', 'Hayvon vazni ko‘rsatilmagan');
+  const links = Array.isArray(record.items) ? (record.items as Array<{ medicineId?: unknown; inventoryItemId?: unknown }>) : [];
+  const itemFor = new Map<string, InventoryItem>();
+  for (const link of links) {
+    if (!version.drugs.some((drug) => drug.medicineId === link.medicineId)) {
+      fail(422, 'MEDICINE_NOT_IN_PROTOCOL', 'Dori bu protokolda yo‘q');
+    }
+    const item = ctx.db.items.find((row) => row.id === link.inventoryItemId && row.farmId === animal.farmId);
+    if (!item) notFound();
+    if (item.category !== 'MEDICINE' || !item.medicineId || item.medicineId !== link.medicineId) {
+      fail(422, 'INVENTORY_ITEM_MISMATCH', 'Ombordagi mahsulot bu doriga mos emas');
+    }
+    itemFor.set(item.medicineId, item);
+  }
+  const today = todayInTashkent();
+  let endsOn = today;
+  let meatUntil = today;
+  let milkUntil = today;
+  const doses = version.drugs.map((drug) => {
+    const lastDay = addDays(today, drug.durationDays - 1);
+    const meat = addDays(lastDay, drug.withdrawalMeatDays);
+    const milk = addDays(lastDay, drug.withdrawalMilkDays);
+    if (lastDay > endsOn) endsOn = lastDay;
+    if (meat > meatUntil) meatUntil = meat;
+    if (milk > milkUntil) milkUntil = milk;
+    let single = Decimal.from(drug.dosePerKg).mul(weight);
+    if (drug.maxSingleDose && single.gt(Decimal.from(drug.maxSingleDose))) single = Decimal.from(drug.maxSingleDose);
+    const item = itemFor.get(drug.medicineId);
+    return {
+      id: newId(),
+      medicineId: drug.medicineId,
+      medicineName: drug.medicineName,
+      inventoryItemId: item?.id ?? null,
+      dosePerKg: drug.dosePerKg,
+      doseUnit: drug.doseUnit,
+      singleDose: single.toFixed(4),
+      route: drug.route,
+      frequencyPerDay: drug.frequencyPerDay,
+      durationDays: drug.durationDays,
+      withdrawalMeatDays: drug.withdrawalMeatDays,
+      withdrawalMilkDays: drug.withdrawalMilkDays,
+      batchNumber: item?.batchNumber ?? null,
+      itemExpiresOn: item?.expiresOn ?? null,
+    };
+  });
+  const treatment: Treatment = {
+    id: newId(),
+    farmId: animal.farmId,
+    animalId: animal.id,
+    protocolVersionId: version.versionId,
+    status: 'ACTIVE',
+    startedAt: now(),
+    endsOn,
+    animalWeightKg: weight.toFixed(2),
+    withdrawalMeatUntil: meatUntil,
+    withdrawalMilkUntil: milkUntil,
+    warning: `Diqqat: go‘sht ${meatUntil} kuni (shu kun ham) va sut ${milkUntil} kuni (shu kun ham) tugaguncha iste’mol qilinmasin va sotilmasin. Davolash veterinar nazoratida o‘tkazilishi kerak.`,
+    notes: str(record, 'notes', { max: 1000 }) ?? null,
+    completedAt: null,
+    cancelledAt: null,
+    createdAt: now(),
+    updatedAt: now(),
+    protocolSnapshot: { protocol: { title: version.title, condition: version.condition, versionId: version.versionId } },
+    doses,
+  };
+  treatmentsOf(ctx.db).push(treatment);
+  audit(ctx.db, ctx.user, 'treatment.started', 'treatment', treatment.id, null, { animalId: animal.id });
+  ctx.db.idempotency[storeKey] = { hash, status: 201, body: treatment };
+  return ok(treatment, 201);
+});
+
+function finishTreatment(ctx: Ctx, status: 'COMPLETED' | 'CANCELLED'): MockResponse {
+  const farms = ownedFarmIds(ctx);
+  const treatment = treatmentsOf(ctx.db).find((row) => row.id === ctx.params.id && farms.has(row.farmId));
+  if (!treatment) notFound();
+  if (treatment.status !== 'ACTIVE') fail(409, 'TREATMENT_NOT_ACTIVE', 'Davolash faol emas');
+  treatment.status = status;
+  treatment.updatedAt = now();
+  if (status === 'COMPLETED') treatment.completedAt = now();
+  else treatment.cancelledAt = now();
+  return ok(treatment);
+}
+
+route('POST', '/vet/treatments/:id/complete', FARMER, (ctx) => finishTreatment(ctx, 'COMPLETED'));
+route('POST', '/vet/treatments/:id/cancel', FARMER, (ctx) => finishTreatment(ctx, 'CANCELLED'));
 
 // --- admin users -----------------------------------------------------------
 

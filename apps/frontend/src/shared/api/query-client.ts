@@ -17,8 +17,10 @@ export function createQueryClient(): QueryClient {
           return (apiError.isNetworkError || apiError.isServerError) && failureCount < MAX_QUERY_RETRIES;
         },
       },
-      // Mutations are never retried blindly.
-      mutations: { retry: false },
+      // Mutations are never retried blindly. Offline they fail at once with a
+      // clear message instead of pausing silently (an endless spinner that
+      // fires later — only if the page is still open).
+      mutations: { retry: false, networkMode: 'always' },
     },
   });
 }

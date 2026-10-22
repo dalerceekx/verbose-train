@@ -1,4 +1,4 @@
-import type { UseQueryResult } from '@tanstack/react-query';
+import type { FetchStatus, UseQueryResult } from '@tanstack/react-query';
 import { Construction, Inbox, RefreshCw, ShieldX, WifiOff, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { toApiError } from '@/shared/api/errors';
@@ -38,14 +38,10 @@ export function EmptyState({ icon = <Inbox className="size-6" />, ...props }: St
 
 /**
  * A feature the backend does not provide (yet). Shown instead of fake data
- * or a pretend success — see docs/integration-gaps.md.
+ * or a pretend success — see docs/integration-gaps.md. Farmer-facing text
+ * stays plain ("Tez orada"), never technical.
  */
-export function GapState({
-  title = 'Bu funksiya hali backend’da mavjud emas',
-  description,
-  action,
-  className,
-}: Partial<StateProps>) {
+export function GapState({ title = 'Bu imkoniyat tez orada qo‘shiladi', description, action, className }: Partial<StateProps>) {
   return (
     <StateBox
       icon={<Construction className="size-6" />}
@@ -79,8 +75,8 @@ export function ErrorState({ error, onRetry, className, collection = false }: Er
     return (
       <GapState
         className={className}
-        title="Bu bo‘lim backend’da hali ishga tushirilmagan"
-        description="Server bu so‘rovni tanimadi (404). Backend moduli tayyor bo‘lgach, ma’lumotlar shu yerda chiqadi."
+        title="Bu bo‘lim hozircha ishga tushirilmagan"
+        description="Tez orada ma’lumotlar shu yerda chiqadi."
       />
     );
   }
@@ -98,11 +94,11 @@ export function ErrorState({ error, onRetry, className, collection = false }: Er
     <StateBox
       className={className}
       icon={apiError.isNetworkError ? <WifiOff className="size-6" /> : <TriangleAlert className="size-6" />}
-      title={apiError.isNetworkError ? 'Aloqa yo‘q' : 'Ma’lumotlarni yuklab bo‘lmadi'}
+      title={apiError.isNetworkError ? 'Ma’lumot yuklanmadi' : 'Ma’lumotlarni yuklab bo‘lmadi'}
       description={
         <>
           <p>{apiError.message}</p>
-          {apiError.requestId ? <p className="mt-1 text-[13px] text-ink-muted">So‘rov ID: {apiError.requestId}</p> : null}
+          {apiError.requestId ? <p className="mt-1 text-[13px] text-ink-muted">Yordam uchun kod: {apiError.requestId}</p> : null}
         </>
       }
       action={
@@ -116,8 +112,37 @@ export function ErrorState({ error, onRetry, className, collection = false }: Er
   );
 }
 
+type QueryLike<T> = Pick<UseQueryResult<T>, 'data' | 'error' | 'isPending' | 'isError' | 'refetch'> & {
+  fetchStatus?: FetchStatus;
+};
+
+/**
+ * Loading vs. "will not load now": without a connection TanStack Query
+ * pauses a fetch (pending forever) — that is shown as not loaded, never as
+ * an endless skeleton or as zeros.
+ */
+export function queryLoadState(query: Pick<QueryLike<unknown>, 'isPending' | 'isError' | 'fetchStatus'>): {
+  loading: boolean;
+  failed: boolean;
+} {
+  const paused = query.isPending && query.fetchStatus === 'paused';
+  return { loading: query.isPending && !paused, failed: query.isError || paused };
+}
+
+/** Nothing cached and no connection: the data simply could not be loaded yet. */
+export function OfflineState({ className }: { className?: string }) {
+  return (
+    <StateBox
+      className={className}
+      icon={<WifiOff className="size-6" />}
+      title="Ma’lumot yuklanmadi"
+      description="Internet yo‘q. Aloqa tiklangach ma’lumotlar o‘zi yuklanadi."
+    />
+  );
+}
+
 interface AsyncContentProps<T> {
-  query: Pick<UseQueryResult<T>, 'data' | 'error' | 'isPending' | 'isError' | 'refetch'>;
+  query: QueryLike<T>;
   children: (data: T) => ReactNode;
   loading?: ReactNode;
   isEmpty?: (data: T) => boolean;
@@ -127,6 +152,7 @@ interface AsyncContentProps<T> {
 
 /** Loading → error → empty → content, the same way on every page. */
 export function AsyncContent<T>({ query, children, loading, isEmpty, empty, collection }: AsyncContentProps<T>) {
+  if (query.isPending && query.fetchStatus === 'paused') return <OfflineState />;
   if (query.isPending) return <>{loading ?? <TableSkeleton />}</>;
   if (query.isError) {
     return <ErrorState error={query.error} collection={collection} onRetry={() => void query.refetch()} />;

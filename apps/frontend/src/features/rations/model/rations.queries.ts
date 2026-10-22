@@ -21,8 +21,9 @@ export function useAnimalTypes(farmId: string) {
 }
 
 /** A farm has few rations: one page of 100 covers them. */
-export function useRations(farmId: string, animalTypeId?: string) {
+export function useRations(farmId: string, animalTypeId?: string, enabled = true) {
   return useQuery({
+    enabled: enabled && farmId !== '',
     queryKey: rationKeys.list(farmId, animalTypeId),
     queryFn: () => rationsApi.list({ farmId, animalTypeId, limit: 100, sort: '-updatedAt' }),
   });
@@ -32,8 +33,19 @@ export function useRation(id: string) {
   return useQuery({ queryKey: rationKeys.detail(id), queryFn: () => rationsApi.get(id) });
 }
 
-export function useRationIssues(id: string) {
-  return useQuery({ queryKey: rationKeys.issues(id), queryFn: () => rationsApi.issues(id, { limit: 20 }) });
+/**
+ * The latest issues of a ration (newest first; the API's maximum page), with
+ * their movements: the history list and the "already given for these days?"
+ * check share it.
+ */
+export const ISSUES_PAGE_SIZE = 100;
+
+export function issuesQuery(id: string) {
+  return { queryKey: rationKeys.issues(id), queryFn: () => rationsApi.issues(id, { limit: ISSUES_PAGE_SIZE }) };
+}
+
+export function useRationIssues(id: string, enabled = true) {
+  return useQuery({ ...issuesQuery(id), enabled });
 }
 
 function useInvalidateRations() {

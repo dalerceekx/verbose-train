@@ -79,17 +79,28 @@ export function RationResultView({
 
       <section aria-label="Xarajatlar">
         <h3 className="mb-2 font-semibold text-ink">Xarajatlar</h3>
-        <dl className="grid grid-cols-3 gap-2.5">
+        {/* The chosen period first and largest; the same calculation as the table above. */}
+        <div className="rounded-[14px] border border-primary-hover/50 bg-primary-light/40 px-3.5 py-3">
+          <p className="text-[13px] text-ink-secondary">{daysLabel} xarajat</p>
+          <p key={result.periodCost.toString()} className="value-flash mt-0.5 text-xl font-semibold text-ink tabular">
+            {formatMoney(result.periodCost)}
+          </p>
+        </div>
+        {/* Rows on a phone, three cards from sm up; an amount never breaks inside its digits. */}
+        <dl className="mt-2.5 grid gap-2 sm:grid-cols-3 sm:gap-2.5">
           {costs.map(([label, value]) => (
-            <div key={label} className="min-w-0 rounded-[14px] border border-line bg-background px-3 py-2.5">
+            <div
+              key={label}
+              className="flex min-w-0 items-baseline justify-between gap-3 rounded-[14px] border border-line bg-background px-3 py-2.5 sm:block"
+            >
               <dt className="text-[13px] text-ink-secondary">{label}</dt>
-              <dd className="mt-0.5 font-semibold break-words text-ink tabular">{formatMoney(value)}</dd>
+              <dd className="text-sm font-semibold text-ink tabular sm:mt-0.5">{formatMoney(value)}</dd>
             </div>
           ))}
         </dl>
       </section>
 
-      <section aria-label="Yemlar bo‘yicha" className="overflow-x-auto">
+      <section aria-label="Yemlar bo‘yicha" className="relative overflow-x-auto">
         <h3 className="mb-2 font-semibold text-ink">Yemlar bo‘yicha</h3>
         <table className="w-full min-w-[620px] border-collapse text-left text-sm">
           <caption className="sr-only">Yemlar bo‘yicha hisob</caption>
@@ -141,7 +152,9 @@ export function RationResultView({
                     {formatDecimal(line.stock)} {unit}
                   </td>
                   <td className="py-2 pr-3 whitespace-nowrap">
-                    {calc.sufficient ? (
+                    {line.archived ? (
+                      <Badge tone="neutral">Arxivlangan · omborda 0</Badge>
+                    ) : calc.sufficient ? (
                       <Badge tone="success">
                         Yetarli · qoladi {formatDecimal(calc.remaining)} {unit}
                       </Badge>

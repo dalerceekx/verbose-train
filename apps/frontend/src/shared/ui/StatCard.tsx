@@ -21,7 +21,8 @@ interface StatCardProps {
 
 export function StatCard({ icon, label, value, secondary, loading, unavailable, failed, to, compact = false }: StatCardProps) {
   const shown = loading ? <Skeleton className={compact ? 'h-6 w-16' : 'h-8 w-24'} /> : unavailable || failed ? '—' : value;
-  const note = unavailable ? 'Backend’da hali mavjud emas' : failed ? 'Yuklab bo‘lmadi' : loading ? null : secondary;
+  // The full card says "Tez orada" with its badge; the compact one (no badge) in the note.
+  const note = unavailable ? (compact ? 'Tez orada' : null) : failed ? 'Ma’lumot yuklanmadi' : loading ? null : secondary;
 
   const body = compact ? (
     <div className="flex items-center gap-2.5">

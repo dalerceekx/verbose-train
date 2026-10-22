@@ -1,0 +1,17 @@
+{
+  "name": "MeningFermam — ferma boshqaruvi",
+  "short_name": "MeningFermam",
+  "description": "Chorvachilik va ferma boshqaruvi: yem ombori, ratsion, dorilar va hisobotlar",
+  "lang": "uz",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf8f1",
+  "theme_color": "#FAF8F2",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }],
+  "shortcuts": [
+    { "name": "Bosh sahifa", "url": "/dashboard" },
+    { "name": "Yem ombori", "url": "/feed" },
+    { "name": "Molim kasal (Hayvonim kasal)", "short_name": "Molim kasal", "url": "/diseases" }
+  ]
+}

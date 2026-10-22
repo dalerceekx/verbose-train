@@ -35,6 +35,8 @@ export function useAnimalCounts(farmId: string) {
   const [total, ...bySpecies] = results;
   return {
     isPending: results.some((result) => result.isPending),
+    /** No connection and nothing cached: the counts will not load until it is back. */
+    isPaused: results.some((result) => result.isPending && result.fetchStatus === 'paused'),
     error: results.find((result) => result.error)?.error ?? null,
     total: total?.data,
     bySpecies: SPECIES.map((species, index) => ({ species, count: bySpecies[index]?.data ?? 0 })),

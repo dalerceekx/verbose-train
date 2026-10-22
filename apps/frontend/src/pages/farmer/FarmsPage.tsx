@@ -100,7 +100,7 @@ export default function FarmsPage() {
       <ConfirmDialog
         open={archiving !== null}
         title="Fermani arxivlash"
-        message="Fermada faol hayvonlar yoki ombor mahsulotlari bo‘lsa, server arxivlashga ruxsat bermaydi. Avval ularni arxivlang."
+        message="Fermada faol hayvonlar yoki ombor mahsulotlari bo‘lsa, fermani arxivlab bo‘lmaydi. Avval ularni arxivlang."
         confirmLabel="Arxivlash"
         loading={archive.isPending}
         error={archive.error ? errorMessage(archive.error) : null}

@@ -24,11 +24,20 @@ const CODE_MESSAGES: Record<string, string> = {
   NOT_FOUND: 'Ma’lumot topilmadi',
   CONFLICT: 'Ma’lumotlar ziddiyati. Sahifani yangilang',
   RETRY: 'So‘rov parallel amal bilan to‘qnashdi, qayta urinib ko‘ring',
-  INTERNAL_ERROR: 'Serverda xatolik yuz berdi. Keyinroq urinib ko‘ring',
+  IDEMPOTENCY_KEY_IN_PROGRESS: 'So‘rov hali bajarilmoqda. Biroz kutib, tarixni tekshiring',
+  ISSUE_OVERLAP: 'Bu ratsion shu kunlar uchun allaqachon berilgan. Qo‘shimcha berish uchun alohida tasdiqlang',
+  DUPLICATE_ITEM: 'Bu nomli yem allaqachon bor',
+  RATION_ITEM_ARCHIVED: 'Ratsiondagi yem arxivlangan — ratsionni tahrirlang',
+  INTERNAL_ERROR: 'Tizimda xatolik yuz berdi. Keyinroq urinib ko‘ring',
 };
 
-export const NETWORK_ERROR_MESSAGE = 'Server bilan aloqa yo‘q. Internet aloqasini tekshirib, qayta urinib ko‘ring';
+export const NETWORK_ERROR_MESSAGE = 'Aloqa yo‘q. Internetni tekshirib, qayta urinib ko‘ring';
+export const OFFLINE_MESSAGE = 'Internet yo‘q. Aloqa tiklangach qayta urinib ko‘ring';
+export const TIMEOUT_MESSAGE = 'Javob kelmadi (kutish vaqti tugadi). Internetni tekshirib, qayta urinib ko‘ring';
 const UNKNOWN_ERROR_MESSAGE = 'Kutilmagan xatolik yuz berdi';
+
+/** Gateway answers: the request may have reached the application before the proxy gave up. */
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
 
 /**
  * Normalized API failure. Everything the UI shows about an error goes
@@ -62,13 +71,35 @@ export class ApiError extends Error {
     this.retryAfterSeconds = init.retryAfterSeconds;
   }
 
+  /** No HTTP answer at all: offline, connection lost or timed out. */
   get isNetworkError(): boolean {
     return this.status === 0;
+  }
+
+  /** The device knew it was offline: the request never left it. */
+  get isOffline(): boolean {
+    return this.code === 'OFFLINE';
+  }
+
+  get isTimeout(): boolean {
+    return this.code === 'TIMEOUT';
   }
 
   get isServerError(): boolean {
     return this.status >= 500;
   }
+
+  /**
+   * The answer was lost on the way back (or a gateway gave up): a write may
+   * have been applied by the server even though the browser saw a failure.
+   */
+  get outcomeUnknown(): boolean {
+    return (this.isNetworkError && !this.isOffline) || GATEWAY_STATUSES.has(this.status);
+  }
+}
+
+function deviceOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 function isErrorBody(value: unknown): value is ApiErrorBody {
@@ -90,6 +121,10 @@ export function toApiError(error: unknown): ApiError {
   if (isAxiosError(error)) {
     const response = error.response;
     if (!response) {
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        return new ApiError({ status: 0, code: 'TIMEOUT', message: TIMEOUT_MESSAGE });
+      }
+      if (deviceOffline()) return new ApiError({ status: 0, code: 'OFFLINE', message: OFFLINE_MESSAGE });
       return new ApiError({ status: 0, code: 'NETWORK_ERROR', message: NETWORK_ERROR_MESSAGE });
     }
     const body: unknown = response.data;
@@ -130,6 +165,20 @@ export function errorMessage(error: unknown): string {
     return `${apiError.message} (${apiError.retryAfterSeconds} soniyadan keyin)`;
   }
   return apiError.message;
+}
+
+/**
+ * Message for a failed save. When the answer was lost the record may already
+ * exist on the server, so the farmer is told to check instead of "not saved";
+ * offline nothing left the device.
+ */
+export function saveErrorMessage(error: unknown, subject = 'Yozuv'): string {
+  const apiError = toApiError(error);
+  if (apiError.outcomeUnknown) {
+    return `Javob kelmadi. ${subject} saqlangan bo‘lishi mumkin — shu oynada qayta urining yoki tarixni tekshiring.`;
+  }
+  if (apiError.isOffline) return `Internet yo‘q — ${subject.toLocaleLowerCase('uz')} saqlanmadi. Aloqa tiklangach qayta urining.`;
+  return errorMessage(error);
 }
 
 /**

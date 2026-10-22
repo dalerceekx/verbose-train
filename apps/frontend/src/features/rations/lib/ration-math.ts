@@ -15,16 +15,23 @@ export interface RationLineInput {
 
 export interface NamedRationLine extends RationLineInput {
   name: string;
+  /** The feed was archived: it is no longer in the warehouse (stock counts as 0). */
+  archived?: boolean;
 }
 
-/** A saved ration's lines with the current warehouse balance and price. */
+/**
+ * A saved ration's lines with the current warehouse balance and price. An
+ * archived feed counts as 0 in stock — its last balance is history, not
+ * something a ration can still be fed from.
+ */
 export function rationLines(ration: Pick<Ration, 'items'>): NamedRationLine[] {
   return ration.items.map((line) => ({
     name: line.item.name,
     unit: line.item.unit,
     dailyPerAnimal: Decimal.from(line.dailyPerAnimal),
-    stock: Decimal.parse(line.item.quantity) ?? Decimal.ZERO,
+    stock: line.item.archivedAt ? Decimal.ZERO : (Decimal.parse(line.item.quantity) ?? Decimal.ZERO),
     unitPrice: Decimal.parse(line.item.unitPrice),
+    archived: line.item.archivedAt !== null,
   }));
 }
 
