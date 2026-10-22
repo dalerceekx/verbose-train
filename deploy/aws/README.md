@@ -160,8 +160,14 @@ generatorni **faqat yangi katalogga** ishlating (Node 22+):
 
 ```bash
 node deploy/aws/prepare.mjs --domain riizq.uz \
-  --eskiz-env apps/backend/.env --out .deploy/aws --tag 20261019-initial
+  --google-client-id YOUR_ID.apps.googleusercontent.com \
+  --out .deploy/aws --tag 20261019-initial
 ```
+
+v1’da SMS o‘chiq: kirish Google orqali (`GOOGLE_CLIENT_ID` majburiy; Google
+Console’da *Authorized JavaScript origins* ga `https://riizq.uz` qo‘shing).
+Eskiz tasdiqlangach SMS’ni yoqish uchun `--eskiz-env apps/backend/.env` bering
+(faqat `ESKIZ_*` va shablon import qilinadi).
 
 Standart rejim — v1 lokal fayl saqlash. S3 bilan (v2) yangi konfiguratsiya
 uchun `--storage s3 --region YOUR_AWS_REGION --bucket riizq-private-ACCOUNT_ID`
@@ -236,13 +242,15 @@ Demo loginlar production’da yo‘q. Birinchi haqiqiy administratorni yarating:
 
 ```bash
 bash deploy/aws/compose.sh ~/.config/riizq run --rm --no-deps \
-  -e BOOTSTRAP_PHONE=+998YOUR_PHONE \
+  -e BOOTSTRAP_EMAIL=YOUR_GOOGLE_EMAIL \
   -e 'BOOTSTRAP_FULL_NAME=Ism Familiya' \
   api node dist/cli/create-super-admin.js
 ```
 
-Parol yashirin stdin orqali so‘raladi, buyruq satriga qo‘shilmaydi. Birinchi
-kirishda TOTP MFA sozlanadi. Bu komanda mavjud haqiqiy admin bo‘lsa rad etadi.
+Faqat `BOOTSTRAP_EMAIL` bilan parol so‘ralmaydi: admin shu Google akkaunt bilan
+kiradi. `BOOTSTRAP_PHONE` ham berilsa, parol yashirin stdin orqali so‘raladi
+(buyruq satriga qo‘shilmaydi). Birinchi kirishda TOTP MFA sozlanadi. Bu komanda
+mavjud haqiqiy admin bo‘lsa rad etadi.
 
 Eskiz kabinetida `4546` sender, aynan `SMS_OTP_TEMPLATE` matni va balansni
 tekshiring. Keyin o‘zingiz boshqaradigan bitta telefon bilan register → OTP →

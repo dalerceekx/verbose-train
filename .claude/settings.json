@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(getent hosts *)",
+      "Bash(ping -c1 -W2 1.1.1.1)",
+      "Read(//run/systemd/resolve/**)",
+      "Bash(timeout 180 docker pull node:22.23.3-alpine3.24)",
+      "Bash(TEST_DATABASE_URL=postgresql://postgres:1234@127.0.0.1:5432/meningfermam_test TEST_REDIS_URL=redis://127.0.0.1:6379/1 npx vitest run --config vitest.config.e2e.ts test/auth/google-login.e2e-spec.ts)",
+      "Bash(grep -v \"^\\\\s*$\")",
+      "Bash(TEST_DATABASE_URL=postgresql://postgres:1234@127.0.0.1:5434/meningfermam_test TEST_REDIS_URL=redis://127.0.0.1:6380/1 npx vitest run --config vitest.config.e2e.ts test/auth/google-login.e2e-spec.ts)",
+      "Bash(TEST_DATABASE_URL=postgresql://postgres:1234@127.0.0.1:5434/meningfermam_test TEST_REDIS_URL=redis://127.0.0.1:6380/1 npx vitest run --config vitest.config.e2e.ts test/sms/sms-dev-inbox.e2e-spec.ts test/auth/sessions.e2e-spec.ts)",
+      "Bash(grep -n \"POST /admin/users\\\\|post\\(USERS\\)\\\\|post\\(\\\\`\\\\${USERS}\\\\`\\)\" test/users/admin-users.e2e-spec.ts)",
+      "Bash(TEST_DATABASE_URL=postgresql://postgres:1234@127.0.0.1:5434/meningfermam_test TEST_REDIS_URL=redis://127.0.0.1:6380/1 npx vitest run --config vitest.config.e2e.ts test/users/admin-users.e2e-spec.ts)",
+      "Bash(node --test deploy/aws/prepare.test.mjs)",
+      "Bash(curl -s http://127.0.0.1:3001/api/v1/auth/methods)",
+      "Bash(curl -s -X POST http://127.0.0.1:3001/api/v1/auth/otp/send -H 'Content-Type: application/json' -d '{\"phone\":\"+998901112233\",\"fullName\":\"Test Ism\",\"password\":\"Parol-2026x\"}')",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(awk '{print $2, $11, $12, $13, $14}')",
+      "Bash(python3 -c \"import PIL; print\\('pil', PIL.__version__\\)\")"
+    ]
+  }
+}

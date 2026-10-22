@@ -14,12 +14,14 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 /** USER_PUBLIC_SELECT — the only user shape the API ever returns. */
 export interface PublicUser {
   id: string;
-  phone: string;
+  /** Null for accounts that sign in with Google only. */
+  phone: string | null;
   email: string | null;
   fullName: string;
   role: UserRole;
   status: UserStatus;
   phoneVerifiedAt: string | null;
+  emailVerifiedAt: string | null;
   mfaEnabled: boolean;
   isDemo: boolean;
   lastLoginAt: string | null;

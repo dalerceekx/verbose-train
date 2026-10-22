@@ -24,6 +24,7 @@ export function prepare({
   bucket = '',
   out,
   eskizEnv,
+  googleClientId = '',
   tag,
 }) {
   if (
@@ -47,6 +48,13 @@ export function prepare({
     new Date().toISOString().replace(/[-:]/g, '').slice(0, 15).toLowerCase();
   if (!/^[a-z0-9][a-z0-9_.-]{0,100}$/.test(release))
     throw new Error('Invalid --tag');
+  if (
+    googleClientId &&
+    !/^[\w-]+\.apps\.googleusercontent\.com$/.test(googleClientId)
+  )
+    throw new Error('Invalid --google-client-id');
+  // SMS (Eskiz) only with its credentials; otherwise sign-in is Google only.
+  const sms = Boolean(eskizEnv);
   const dir = resolve(out ?? '.deploy/aws');
   // An explicit allowlist imports only Eskiz settings, never dev DB/keys/demo.
   const source = eskizEnv ? parseEnv(readFileSync(eskizEnv, 'utf8')) : {};
@@ -86,8 +94,9 @@ export function prepare({
     DATA_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
     PASSWORD_SCRYPT_COST: '65536',
     SMS_PROVIDER: 'eskiz',
-    SMS_ENABLED: 'true',
+    SMS_ENABLED: sms ? 'true' : 'false',
     SMS_MOCK_MODE: 'false',
+    GOOGLE_CLIENT_ID: googleClientId,
     ESKIZ_EMAIL: '',
     ESKIZ_PASSWORD: '',
     ESKIZ_FROM: '4546',
@@ -151,8 +160,7 @@ export function prepare({
   return {
     dir,
     missing: [
-      'ESKIZ_EMAIL',
-      'ESKIZ_PASSWORD',
+      ...(sms ? ['ESKIZ_EMAIL', 'ESKIZ_PASSWORD'] : ['GOOGLE_CLIENT_ID']),
       ...(storage === 's3' ? ['S3_REGION', 'S3_BUCKET'] : []),
     ].filter((key) => !api[key]),
   };
@@ -171,10 +179,15 @@ if (
         bucket: { type: 'string' },
         out: { type: 'string' },
         'eskiz-env': { type: 'string' },
+        'google-client-id': { type: 'string' },
         tag: { type: 'string' },
       },
     });
-    const result = prepare({ ...values, eskizEnv: values['eskiz-env'] });
+    const result = prepare({
+      ...values,
+      eskizEnv: values['eskiz-env'],
+      googleClientId: values['google-client-id'],
+    });
     console.log(`Private deployment files created: ${result.dir}`);
     if (result.missing.length)
       console.log(

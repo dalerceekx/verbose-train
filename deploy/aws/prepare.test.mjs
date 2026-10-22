@@ -105,11 +105,39 @@ test('S3 storage is opt-in: bucket settings, IAM role by default, missing fields
     assert.equal(api.S3_ACCESS_KEY_ID, '');
     assert.equal(api.UPLOAD_LOCAL_DIR, undefined);
     assert.deepEqual(prepare({ ...opts, out: join(dir, 'partial') }).missing, [
-      'ESKIZ_EMAIL',
-      'ESKIZ_PASSWORD',
+      'GOOGLE_CLIENT_ID',
       'S3_REGION',
       'S3_BUCKET',
     ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('without Eskiz credentials SMS is off and Google sign-in is required', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'riizq-prepare-test-'));
+  try {
+    const clientId = '1234567890-web.apps.googleusercontent.com';
+    const result = prepare({
+      domain: 'riizq.uz',
+      googleClientId: clientId,
+      out: join(dir, 'google'),
+      tag: 'test',
+    });
+    assert.deepEqual(result.missing, []);
+    const api = read(join(dir, 'google/api.env'));
+    assert.equal(api.SMS_ENABLED, 'false');
+    assert.equal(api.GOOGLE_CLIENT_ID, clientId);
+    assert.equal(api.ESKIZ_PASSWORD, '');
+    assert.throws(
+      () =>
+        prepare({
+          domain: 'riizq.uz',
+          googleClientId: 'not-a-client-id',
+          out: join(dir, 'bad'),
+        }),
+      { message: 'Invalid --google-client-id' },
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

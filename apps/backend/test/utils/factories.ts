@@ -78,7 +78,8 @@ export interface CreateUserOptions {
 }
 
 export interface CreatedUser {
-  user: User;
+  /** Factory users always have a phone (Google-only accounts are built inline). */
+  user: User & { phone: string };
   password: string;
   /** Base32 TOTP secret when `mfaEnabled` (use with totpNow). */
   mfaSecret?: string;
@@ -124,7 +125,7 @@ export async function createUser(
       createdAt: now,
     },
   });
-  return { user, password, mfaSecret };
+  return { user: { ...user, phone }, password, mfaSecret };
 }
 
 export function createFarm(

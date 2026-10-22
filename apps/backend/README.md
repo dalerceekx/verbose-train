@@ -86,6 +86,8 @@ Birinchi SUPER_ADMIN production’da CLI bilan yaratiladi (parol faqat stdin’d
 
 ```sh
 BOOTSTRAP_PHONE=+998901234567 BOOTSTRAP_FULL_NAME='Ism Familiya' npm run admin:create
+# yoki Google akkaunti bilan (parolsiz):
+BOOTSTRAP_EMAIL=admin@gmail.com BOOTSTRAP_FULL_NAME='Ism Familiya' npm run admin:create
 ```
 
 ## Auth oqimlari

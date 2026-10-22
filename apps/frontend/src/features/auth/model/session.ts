@@ -20,6 +20,8 @@ function authChannel(): BroadcastChannel | null {
 /** Called after login / MFA success. */
 export function startSession(response: AuthenticatedResponse, queryClient: QueryClient): void {
   accessTokenStore.set(response.accessToken);
+  // Whatever was cached before (the sample farm of guest mode) is not theirs.
+  queryClient.clear();
   queryClient.setQueryData(authKeys.me, response.user);
   useSessionStore.setState({ status: 'authenticated', mfaChallenge: null, notice: null, endReason: null });
 }

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MOCK_MFA_CODE, MOCK_PASSWORDS } from '@/mocks/db';
 import { PHONES, renderApp, resetClientState, setupMockApi, signIn, type TestApi } from '@/test/render';
@@ -19,8 +19,15 @@ async function fillLogin(view: ReturnType<typeof renderApp>, phone: string, pass
 }
 
 describe('authentication', () => {
-  it('sends anonymous visitors of protected pages to the login page', async () => {
+  it('shows anonymous visitors the sample farm, but sends them to the login page for account pages', async () => {
     const view = renderApp('/animals');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hayvonlar' })).toBeInTheDocument();
+    expect(await screen.findByText('Oqqiz')).toBeInTheDocument();
+    expect(screen.getByText('Bu — namuna ferma')).toBeInTheDocument();
+    // Guest reads never reach the API.
+    expect(api.requests.some((request) => request.path === '/animals')).toBe(false);
+
+    await act(() => view.router.navigate('/profile'));
     expect(await screen.findByRole('heading', { name: 'Xush kelibsiz!' })).toBeInTheDocument();
     expect(view.router.state.location.pathname).toBe('/login');
   });
@@ -35,11 +42,15 @@ describe('authentication', () => {
     expect(login?.body).toEqual({ phone: PHONES.farmer, password: MOCK_PASSWORDS.farmer });
   });
 
-  it('returns the farmer to the page they originally asked for', async () => {
+  it('returns the farmer to the page they were browsing before signing in', async () => {
     const view = renderApp('/feed-calculator');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Yem hisoblagich' })).toBeInTheDocument();
+    // The header's profile place (the banner has a second "Kirish").
+    await view.user.click(within(screen.getByRole('banner')).getByRole('link', { name: 'Kirish' }));
     await fillLogin(view, PHONES.farmer, MOCK_PASSWORDS.farmer);
     expect(await screen.findByRole('heading', { level: 1, name: 'Yem hisoblagich' })).toBeInTheDocument();
     expect(view.router.state.location.pathname).toBe('/feed-calculator');
+    expect(screen.queryByText('Bu — namuna ferma')).not.toBeInTheDocument();
   });
 
   it('shows the backend message for wrong credentials and stays on the login page', async () => {

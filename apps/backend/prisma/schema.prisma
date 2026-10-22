@@ -184,14 +184,19 @@ enum DiseaseInfoStatus {
 model User {
   id                  String     @id @default(uuid()) @db.Uuid
   // Normalized E.164 (+998XXXXXXXXX). CHECK constraint enforces the format.
-  phone               String     @unique @db.VarChar(16)
+  // Null for Google-only accounts; a CHECK requires a phone or an email.
+  phone               String?    @unique @db.VarChar(16)
   // citext: case-insensitive uniqueness; the app also stores it lower-cased.
   email               String?    @unique @db.Citext
   fullName            String     @map("full_name") @db.VarChar(100)
+  // Google-only accounts get a hash of a random secret nobody knows.
   passwordHash        String     @map("password_hash") @db.VarChar(255)
   role                UserRole   @default(FARMER)
   status              UserStatus @default(PENDING_VERIFICATION)
   phoneVerifiedAt     DateTime?  @map("phone_verified_at")
+  emailVerifiedAt     DateTime?  @map("email_verified_at")
+  // Google account id (ID token `sub`): stable, unlike the email address.
+  googleSub           String?    @unique @map("google_sub") @db.VarChar(255)
   isDemo              Boolean    @default(false) @map("is_demo")
   // TOTP secrets are AES-256-GCM encrypted with DATA_ENCRYPTION_KEY.
   mfaEnabled          Boolean    @default(false) @map("mfa_enabled")

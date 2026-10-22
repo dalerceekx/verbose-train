@@ -17,21 +17,29 @@ import { readPassword } from './read-password.js';
  *   BOOTSTRAP_PHONE=+998901234567 BOOTSTRAP_FULL_NAME='Ism Familiya' \
  *     node dist/cli/create-super-admin.js        # password from stdin
  *
+ *   BOOTSTRAP_EMAIL=admin@gmail.com BOOTSTRAP_FULL_NAME='Ism Familiya' \
+ *     node dist/cli/create-super-admin.js        # Google sign-in, no password
+ *
  * The password is read from stdin only and is never printed.
  */
 async function main(): Promise<number> {
   const target = validateBootstrapTarget(
     process.env.BOOTSTRAP_PHONE,
     process.env.BOOTSTRAP_FULL_NAME,
+    process.env.BOOTSTRAP_EMAIL,
   );
-  const password = await readPassword('Parol: ');
-  if (process.stdin.isTTY) {
-    const confirmation = await readPassword('Parolni takrorlang: ');
-    if (confirmation !== password) {
-      throw new BootstrapError('Parollar mos kelmadi');
+  // Phone accounts sign in with phone + password; Google-only ones have none.
+  let password: string | null = null;
+  if (target.phone) {
+    password = await readPassword('Parol: ');
+    if (process.stdin.isTTY) {
+      const confirmation = await readPassword('Parolni takrorlang: ');
+      if (confirmation !== password) {
+        throw new BootstrapError('Parollar mos kelmadi');
+      }
     }
+    assertBootstrapPassword(password, target.phone);
   }
-  assertBootstrapPassword(password, target.phone);
 
   // Imported here so an invalid environment (validated while the module is
   // being declared) is reported through the error handler below.
@@ -50,7 +58,8 @@ async function main(): Promise<number> {
       { ...target, password },
     );
     process.stdout.write(
-      `SUPER_ADMIN yaratildi: ${created.phoneMasked} (id: ${created.id}). ` +
+      `SUPER_ADMIN yaratildi: ${created.contactMasked} (id: ${created.id}). ` +
+        (target.phone ? '' : 'Shu Google akkaunti bilan kiring. ') +
         'Birinchi kirishda ikki bosqichli tasdiqlash (TOTP) sozlanadi.\n',
     );
     return 0;

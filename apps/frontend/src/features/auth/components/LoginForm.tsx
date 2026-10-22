@@ -22,7 +22,8 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-export function LoginForm({ defaultPhone = '' }: { defaultPhone?: string }) {
+/** Phone + password. `passwordReset`: offer the SMS reset link (off while SMS is off). */
+export function LoginForm({ defaultPhone = '', passwordReset = true }: { defaultPhone?: string; passwordReset?: boolean }) {
   const login = useLogin();
   const {
     register,
@@ -50,11 +51,13 @@ export function LoginForm({ defaultPhone = '' }: { defaultPhone?: string }) {
         <Field label="Parol" error={errors.password?.message} required>
           <PasswordInput autoComplete="current-password" placeholder="Parolingiz" {...register('password')} />
         </Field>
-        <div className="-mt-1 flex justify-end">
-          <Link to="/forgot-password" className="text-sm font-medium text-warning underline-offset-4 hover:underline">
-            Parolni unutdingizmi?
-          </Link>
-        </div>
+        {passwordReset ? (
+          <div className="-mt-1 flex justify-end">
+            <Link to="/forgot-password" className="text-sm font-medium text-warning underline-offset-4 hover:underline">
+              Parolni unutdingizmi?
+            </Link>
+          </div>
+        ) : null}
 
         {apiError?.code === 'PHONE_NOT_VERIFIED' ? (
           <Alert tone="warning" title="Telefon raqami tasdiqlanmagan" urgent>
@@ -72,10 +75,6 @@ export function LoginForm({ defaultPhone = '' }: { defaultPhone?: string }) {
           Kirish
         </Button>
       </form>
-
-      <p className="text-center text-[13px] text-ink-secondary">
-        Hozircha telefon raqami va parol bilan kirish mumkin. Email va SMS-kod orqali kirish tez orada qo‘shiladi.
-      </p>
 
       {DemoAccounts && env.showDemoAccounts ? (
         <Suspense fallback={null}>

@@ -1,12 +1,24 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router';
 import { toApiError } from '@/shared/api/errors';
 import { toast } from '@/shared/ui';
 import { authApi } from '../api/auth.api';
-import type { AuthenticatedResponse } from '../api/auth.types';
+import type { AuthenticatedResponse, LoginResponse } from '../api/auth.types';
 import { postLoginTarget } from '../lib/redirect';
+import { authKeys } from '../model/keys';
 import { endSession, startSession } from '../model/session';
 import { useSessionStore } from '../model/session.store';
+
+/** Sign-in methods the server offers (Google client ID, SMS on/off). */
+export function useAuthMethods() {
+  return useQuery({
+    queryKey: authKeys.methods,
+    queryFn: authApi.methods,
+    // Server configuration: it does not change while the page is open.
+    staleTime: Infinity,
+    retry: 1,
+  });
+}
 
 function useCompleteLogin() {
   const queryClient = useQueryClient();
@@ -18,30 +30,39 @@ function useCompleteLogin() {
   };
 }
 
-export function useLogin() {
+/** A session, or the TOTP step admin roles take after the first factor. */
+function useLoginOutcome() {
   const completeLogin = useCompleteLogin();
   const navigate = useNavigate();
   const location = useLocation();
   const setMfaChallenge = useSessionStore((state) => state.setMfaChallenge);
 
-  return useMutation({
-    mutationFn: authApi.login,
-    onSuccess: (response) => {
-      if (response.status === 'AUTHENTICATED') {
-        completeLogin(response);
-        return;
-      }
-      setMfaChallenge({
-        kind: response.status,
-        mfaToken: response.mfaToken,
-        expiresAt: Date.now() + response.mfaTokenExpiresIn * 1000,
-      });
-      // Keep the original destination for after the MFA step.
-      navigate(response.status === 'MFA_SETUP_REQUIRED' ? '/login/mfa-setup' : '/login/mfa', {
-        state: location.state,
-      });
-    },
-  });
+  return (response: LoginResponse) => {
+    if (response.status === 'AUTHENTICATED') {
+      completeLogin(response);
+      return;
+    }
+    setMfaChallenge({
+      kind: response.status,
+      mfaToken: response.mfaToken,
+      expiresAt: Date.now() + response.mfaTokenExpiresIn * 1000,
+    });
+    // Keep the original destination for after the MFA step.
+    navigate(response.status === 'MFA_SETUP_REQUIRED' ? '/login/mfa-setup' : '/login/mfa', {
+      state: location.state,
+    });
+  };
+}
+
+export function useLogin() {
+  const onOutcome = useLoginOutcome();
+  return useMutation({ mutationFn: authApi.login, onSuccess: onOutcome });
+}
+
+/** Signs in with the ID token ("credential") of the Google button. */
+export function useGoogleLogin() {
+  const onOutcome = useLoginOutcome();
+  return useMutation({ mutationFn: authApi.google, onSuccess: onOutcome });
 }
 
 export function useMfaVerify() {

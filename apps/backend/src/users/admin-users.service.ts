@@ -10,6 +10,7 @@ import {
   toSkipTake,
   type Paginated,
 } from '../common/pagination/index.js';
+import { maskEmail } from '../common/email.js';
 import { maskPhone } from '../common/phone.js';
 import {
   USER_PUBLIC_SELECT,
@@ -28,6 +29,7 @@ import {
   PrismaService,
   type Tx,
 } from '../prisma/prisma.service.js';
+import { randomToken } from '../security/crypto.js';
 import { PasswordService } from '../security/password.service.js';
 import { SessionService } from '../security/sessions/session.service.js';
 import {
@@ -162,7 +164,10 @@ export class AdminUsersService {
 
   async create(actor: AuthUser, dto: CreateUserDto): Promise<PublicUser> {
     // Hashed before the transaction so no row lock is held during scrypt.
-    const passwordHash = await this.passwords.hash(dto.password);
+    // Without a password (a Google-only account) nobody knows the secret.
+    const passwordHash = await this.passwords.hash(
+      dto.password ?? randomToken(),
+    );
     try {
       return await this.prisma.$transaction(async (tx) => {
         const current = await this.lockAndRead(tx, [actor.id]);
@@ -173,15 +178,19 @@ export class AdminUsersService {
         if (acting.isDemo) throw AdminErrors.demoCreate();
         assertMayGrant(acting.role, dto.role);
 
+        // Contacts an admin enters are treated as verified (as before for
+        // phones); a Google sign-in links the account by this email.
         const now = new Date();
         const user = await tx.user.create({
           data: {
-            phone: dto.phone,
+            phone: dto.phone ?? null,
+            email: dto.email ?? null,
             fullName: dto.fullName,
             passwordHash,
             role: dto.role,
             status: UserStatus.ACTIVE,
-            phoneVerifiedAt: now,
+            phoneVerifiedAt: dto.phone ? now : null,
+            emailVerifiedAt: dto.email ? now : null,
           },
           select: USER_PUBLIC_SELECT,
         });
@@ -193,7 +202,8 @@ export class AdminUsersService {
             newValue: {
               role: user.role,
               status: user.status,
-              phoneMasked: maskPhone(user.phone),
+              phoneMasked: user.phone ? maskPhone(user.phone) : null,
+              emailMasked: user.email ? maskEmail(user.email) : null,
               isDemo: user.isDemo,
             },
           },
@@ -202,6 +212,12 @@ export class AdminUsersService {
         return user;
       });
     } catch (err) {
+      if (isUniqueViolation(err, 'users_email_key')) {
+        throw Errors.conflict(
+          'EMAIL_TAKEN',
+          'Bu email bilan foydalanuvchi allaqachon mavjud',
+        );
+      }
       if (isUniqueViolation(err)) {
         throw Errors.conflict(
           'PHONE_TAKEN',
@@ -275,7 +291,7 @@ export class AdminUsersService {
       if (ctx.target.status !== UserStatus.BLOCKED) {
         throw Errors.conflict('USER_NOT_BLOCKED', 'Foydalanuvchi bloklanmagan');
       }
-      if (!ctx.target.phoneVerifiedAt) {
+      if (!ctx.target.phoneVerifiedAt && !ctx.target.emailVerifiedAt) {
         throw Errors.conflict(
           'PHONE_NOT_VERIFIED',
           'Telefon raqami tasdiqlanmagan',

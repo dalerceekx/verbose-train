@@ -154,7 +154,17 @@ export class LoginService {
 
     await this.rateLimit.reset(AuthKeys.loginFailures(dto.phone));
     await this.rehashIfNeeded(user.id, user.passwordHash, dto.password);
+    return this.startSession(user, meta);
+  }
 
+  /**
+   * After the first factor (password or Google): admin roles continue with
+   * TOTP (setup on first login), everyone else gets a session now.
+   */
+  async startSession(
+    user: { id: string; role: UserRole; mfaEnabled: boolean },
+    meta: SessionMeta,
+  ): Promise<LoginOutcome> {
     if (isMfaRequiredRole(user.role)) {
       const purpose = user.mfaEnabled ? 'challenge' : 'setup';
       const mfa = await this.tokens.signMfa(user.id, purpose);

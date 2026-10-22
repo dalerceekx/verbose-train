@@ -1,6 +1,7 @@
 export const AuditAction = {
   AUTH_REGISTER: 'auth.register',
   AUTH_PHONE_VERIFIED: 'auth.phone.verified',
+  AUTH_GOOGLE_LINKED: 'auth.google.linked',
   AUTH_LOGIN_SUCCESS: 'auth.login.success',
   AUTH_LOGIN_FAILED: 'auth.login.failed',
   AUTH_LOGIN_LOCKED: 'auth.login.locked',

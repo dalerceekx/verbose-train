@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { Navigate, type RouteObject } from 'react-router';
-import { GuestOnly, RequireAuth, RequireRole, RoleHomeRedirect } from '@/features/auth/components/guards';
+import { AuthOrGuest, GuestOnly, RequireAuth, RequireRole, RoleHomeRedirect } from '@/features/auth/components/guards';
 import { can } from '@/features/auth/lib/permissions';
 import LoginPage from '@/pages/auth/LoginPage';
 import { MfaSetupPage, MfaVerifyPage } from '@/pages/auth/MfaPages';
@@ -50,7 +50,9 @@ export const routes: RouteObject[] = [
         ],
       },
       {
-        element: <RequireAuth />,
+        // Guest mode: without an account the farmer app shows the sample
+        // farm; account pages and actions send the visitor to the login page.
+        element: <AuthOrGuest />,
         children: [
           {
             element: <AppLayout />,
@@ -58,14 +60,19 @@ export const routes: RouteObject[] = [
             children: [
               { path: '/', element: <RoleHomeRedirect /> },
               {
-                path: '/profile',
-                element: <ProfileLayout />,
-                handle: { title: 'Profil', description: 'Shaxsiy ma’lumotlar va xavfsizlik' },
+                element: <RequireAuth />,
                 children: [
-                  { index: true, element: <ProfileOverviewPage /> },
-                  { path: 'email', element: <ProfileEmailPage />, handle: { title: 'Email qo‘shish' } },
-                  { path: 'password', element: <ProfilePasswordPage />, handle: { title: 'Parolni almashtirish' } },
-                  { path: 'security', element: <ProfileSecurityPage />, handle: { title: 'Kirish usullari' } },
+                  {
+                    path: '/profile',
+                    element: <ProfileLayout />,
+                    handle: { title: 'Profil', description: 'Shaxsiy ma’lumotlar va xavfsizlik' },
+                    children: [
+                      { index: true, element: <ProfileOverviewPage /> },
+                      { path: 'email', element: <ProfileEmailPage />, handle: { title: 'Email qo‘shish' } },
+                      { path: 'password', element: <ProfilePasswordPage />, handle: { title: 'Parolni almashtirish' } },
+                      { path: 'security', element: <ProfileSecurityPage />, handle: { title: 'Kirish usullari' } },
+                    ],
+                  },
                 ],
               },
               {
@@ -115,19 +122,9 @@ export const routes: RouteObject[] = [
                     ...page(() => import('@/pages/farmer/RationTypePage')),
                   },
                   {
-                    path: '/feed-calculator/types/:typeId/new',
-                    handle: { title: 'Yangi ratsion', description: 'Hisoblash va saqlash ombordagi qoldiqni o‘zgartirmaydi' },
-                    ...page(() => import('@/pages/farmer/RationEditorPage')),
-                  },
-                  {
                     path: '/feed-calculator/rations/:rationId',
                     handle: { title: 'Ratsion natijalari' },
                     ...page(() => import('@/pages/farmer/RationPage')),
-                  },
-                  {
-                    path: '/feed-calculator/rations/:rationId/edit',
-                    handle: { title: 'Ratsionni tahrirlash', description: 'O‘zgartirishdan keyin hisob qayta bajariladi' },
-                    ...page(() => import('@/pages/farmer/RationEditorPage')),
                   },
                   {
                     path: '/medicines',
@@ -135,19 +132,36 @@ export const routes: RouteObject[] = [
                     ...page(() => import('@/pages/farmer/MedicinesPage')),
                   },
                   {
-                    path: '/diseases',
-                    handle: { title: 'Molim kasal', description: 'Kasalliklar ma’lumotnomasi — manba matni' },
-                    ...page(() => import('@/pages/farmer/DiseasesPage')),
-                  },
-                  {
-                    path: '/diseases/source',
-                    handle: { title: 'Asl matn', description: 'Kasalliklar ma’lumotnomasining to‘liq manba matni' },
-                    ...page(() => import('@/pages/farmer/DiseaseSourcePage')),
-                  },
-                  {
-                    path: '/diseases/:number',
-                    handle: { title: 'Kasallik', description: 'Manba matni — veterinar tasdig‘i talab qilinadi' },
-                    ...page(() => import('@/pages/farmer/DiseasePage')),
+                    // Editing a ration is an action; the disease reference is
+                    // served to signed-in users only (no sample copy).
+                    element: <RequireAuth />,
+                    children: [
+                      {
+                        path: '/feed-calculator/types/:typeId/new',
+                        handle: { title: 'Yangi ratsion', description: 'Hisoblash va saqlash ombordagi qoldiqni o‘zgartirmaydi' },
+                        ...page(() => import('@/pages/farmer/RationEditorPage')),
+                      },
+                      {
+                        path: '/feed-calculator/rations/:rationId/edit',
+                        handle: { title: 'Ratsionni tahrirlash', description: 'O‘zgartirishdan keyin hisob qayta bajariladi' },
+                        ...page(() => import('@/pages/farmer/RationEditorPage')),
+                      },
+                      {
+                        path: '/diseases',
+                        handle: { title: 'Molim kasal', description: 'Kasalliklar ma’lumotnomasi — manba matni' },
+                        ...page(() => import('@/pages/farmer/DiseasesPage')),
+                      },
+                      {
+                        path: '/diseases/source',
+                        handle: { title: 'Asl matn', description: 'Kasalliklar ma’lumotnomasining to‘liq manba matni' },
+                        ...page(() => import('@/pages/farmer/DiseaseSourcePage')),
+                      },
+                      {
+                        path: '/diseases/:number',
+                        handle: { title: 'Kasallik', description: 'Manba matni — veterinar tasdig‘i talab qilinadi' },
+                        ...page(() => import('@/pages/farmer/DiseasePage')),
+                      },
+                    ],
                   },
                   {
                     path: '/medicines/stock/:itemId',
@@ -170,55 +184,60 @@ export const routes: RouteObject[] = [
               },
               {
                 path: '/admin',
-                element: <RequireRole allow={can.useStaffApp} />,
+                element: <RequireAuth />,
                 children: [
                   {
-                    element: <RequireRole allow={can.viewUsers} />,
+                    element: <RequireRole allow={can.useStaffApp} />,
                     children: [
                       {
-                        index: true,
-                        handle: { title: 'Boshqaruv paneli', description: 'Tizim bo‘yicha umumiy ko‘rsatkichlar' },
-                        ...page(() => import('@/pages/admin/AdminDashboardPage')),
+                        element: <RequireRole allow={can.viewUsers} />,
+                        children: [
+                          {
+                            index: true,
+                            handle: { title: 'Boshqaruv paneli', description: 'Tizim bo‘yicha umumiy ko‘rsatkichlar' },
+                            ...page(() => import('@/pages/admin/AdminDashboardPage')),
+                          },
+                          {
+                            path: 'users',
+                            handle: { title: 'Foydalanuvchilar', description: 'Hisoblar, rollar va holatlar' },
+                            ...page(() => import('@/pages/admin/UsersPage')),
+                          },
+                          {
+                            path: 'users/:userId',
+                            handle: { title: 'Foydalanuvchi' },
+                            ...page(() => import('@/pages/admin/UserDetailsPage')),
+                          },
+                          {
+                            path: 'roles',
+                            handle: { title: 'Rollar', description: 'Rollar va ularning huquqlari' },
+                            ...page(() => import('@/pages/admin/RolesPage')),
+                          },
+                        ],
                       },
                       {
-                        path: 'users',
-                        handle: { title: 'Foydalanuvchilar', description: 'Hisoblar, rollar va holatlar' },
-                        ...page(() => import('@/pages/admin/UsersPage')),
+                        element: <RequireRole allow={can.viewAuditLogs} />,
+                        children: [
+                          {
+                            path: 'audit-logs',
+                            handle: { title: 'Audit loglar', description: 'Tizimdagi muhim amallar tarixi (faqat o‘qish)' },
+                            ...page(() => import('@/pages/admin/AuditLogsPage')),
+                          },
+                        ],
                       },
                       {
-                        path: 'users/:userId',
-                        handle: { title: 'Foydalanuvchi' },
-                        ...page(() => import('@/pages/admin/UserDetailsPage')),
+                        path: 'medicines',
+                        handle: { title: 'Dorilar katalogi', description: 'Dorilar va ularning tasdiqlash holati' },
+                        ...page(() => import('@/pages/admin/MedicinesAdminPage')),
                       },
                       {
-                        path: 'roles',
-                        handle: { title: 'Rollar', description: 'Rollar va ularning huquqlari' },
-                        ...page(() => import('@/pages/admin/RolesPage')),
-                      },
-                    ],
-                  },
-                  {
-                    element: <RequireRole allow={can.viewAuditLogs} />,
-                    children: [
-                      {
-                        path: 'audit-logs',
-                        handle: { title: 'Audit loglar', description: 'Tizimdagi muhim amallar tarixi (faqat o‘qish)' },
-                        ...page(() => import('@/pages/admin/AuditLogsPage')),
-                      },
-                    ],
-                  },
-                  {
-                    path: 'medicines',
-                    handle: { title: 'Dorilar katalogi', description: 'Dorilar va ularning tasdiqlash holati' },
-                    ...page(() => import('@/pages/admin/MedicinesAdminPage')),
-                  },
-                  {
-                    element: <RequireRole allow={can.manageUsers} />,
-                    children: [
-                      {
-                        path: 'settings',
-                        handle: { title: 'Sozlamalar' },
-                        ...page(() => import('@/pages/admin/SettingsPage')),
+                        element: <RequireRole allow={can.manageUsers} />,
+                        children: [
+                          {
+                            path: 'settings',
+                            handle: { title: 'Sozlamalar' },
+                            ...page(() => import('@/pages/admin/SettingsPage')),
+                          },
+                        ],
                       },
                     ],
                   },

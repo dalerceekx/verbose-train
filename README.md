@@ -24,17 +24,39 @@ Ctrl+C faqat frontend’ni to‘xtatadi. Backend loglari: `npm run dev:logs`,
 to‘xtatish: `npm run dev:down`. Backend’ni loglari bilan oldingi rejimda
 ko‘tarish: `npm run start:dev` (frontend alohida terminalda `npm run dev:web`).
 
-## SMS va telefonni tasdiqlash
+## Google bilan kirish (v1) va SMS
 
-Development’da SMS provayderi `mock`: ro‘yxatdan o‘tish sahifasida telefon va
-parolni kiriting, kodni `http://localhost:3001/api/v1/dev/sms-inbox` dan oling.
-Haqiqiy SMS yuborilmaydi. Kod 5 daqiqa amal qiladi, qayta yuborish oralig‘i
-60 soniya; muvaffaqiyatli tasdiqdan keyin odatdagi login ishlaydi.
+v1’da SMS o‘chiq (`SMS_ENABLED=false`, Eskiz akkaunti tasdiqlanguncha):
+fermerlar **“Google bilan kirish”** tugmasi orqali kiradi — birinchi kirishda
+`FARMER` hisobi avtomatik ochiladi. Administrator xodim qo‘shganda uning Google
+emailini kiritadi; o‘sha Google akkaunt bilan kirganda hisob bog‘lanadi.
+Admin rollari Google’dan keyin ham TOTP (ikki bosqichli) kodini kiritadi.
+Telefon + parol bilan kirish (admin bergan hisoblar, demo) ishlashda davom etadi.
 
-Eskiz sozlamalari, API namunalari, xavfsiz testlash va kabinetda tekshiriladigan
-shartlar: [Eskiz OTP qo‘llanmasi](apps/backend/docs/operations/eskiz-otp.md).
-`4546` jo‘natuvchisi va SMS shabloni akkauntda tasdiqlanmaguncha hamda haqiqiy
-SMS sinovi bajarilmaguncha production ulanishi tekshirilgan hisoblanmaydi.
+Google Client ID olish (bepul, bir marta):
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → loyiha yarating.
+2. **APIs & Services → OAuth consent screen**: *External*, ilova nomi va email.
+3. **Credentials → Create credentials → OAuth client ID → Web application**.
+   *Authorized JavaScript origins*: `http://localhost:5173` (dev) va
+   `https://riizq.uz` (production). Redirect URI kerak emas.
+4. Client ID’ni (`…apps.googleusercontent.com`) `apps/backend/.env` dagi
+   `GOOGLE_CLIENT_ID=` ga yozing va `npm run dev:restart`. Client secret kerak emas.
+
+Birinchi haqiqiy SUPER_ADMIN (Google email bilan, parolsiz):
+
+```sh
+docker compose -f apps/backend/compose.dev.yaml exec \
+  -e BOOTSTRAP_EMAIL=siz@gmail.com -e 'BOOTSTRAP_FULL_NAME=Ism Familiya' \
+  api node dist/cli/create-super-admin.js
+```
+
+Demo SUPER_ADMIN yangi foydalanuvchi yarata olmaydi (ataylab: demo
+akkauntlar faqat namoyish uchun) — foydalanuvchilarni haqiqiy admin qo‘shadi.
+
+SMS’ni qayta yoqish (v2): `SMS_ENABLED=true`, Eskiz sozlamalari —
+[Eskiz OTP qo‘llanmasi](apps/backend/docs/operations/eskiz-otp.md). Dev’da
+`SMS_PROVIDER=mock` kodlari `http://localhost:3001/api/v1/dev/sms-inbox` da.
 
 ## Asosiy komandalar (root)
 
@@ -60,13 +82,15 @@ Redis va avtomatik HTTPS konfiguratsiyasi tayyor:
 Production fayllari `.deploy/aws/` da alohida saqlanadi; development `.env`
 serverga ko‘chirilmaydi. v1’da yuklangan fayllar serverdagi private volume’da
 saqlanadi (S3 — v2’da). Release oldidan DNS’ni server IP’siga yo‘naltirish va
-Eskiz sender/shablonini tekshirish kerak.
+Google OAuth client’ga `https://riizq.uz` origin’ini qo‘shish kerak.
 
 ## Muammolar va yechimlar
 
 | Xabar | Yechim |
 | --- | --- |
 | `failed to connect to the docker API` / `Docker Desktop is manually paused` | Docker Desktop’ni oching (pauzada bo‘lsa — Resume). |
+| `failed to resolve source metadata … Temporary failure in name resolution` | Internet/DNS yo‘q (masalan, uyqudan keyin Wi-Fi hali ulanmagan): ulanishni tekshirib qayta ishga tushiring. |
+| “Google tugmasini yuklab bo‘lmadi” / tugma ko‘rinmaydi | `GOOGLE_CLIENT_ID` bo‘sh yoki sahifa origin’i Google Console’dagi *Authorized JavaScript origins* ro‘yxatida yo‘q. |
 | `This project is configured to use npm` | Loyiha faqat npm bilan: `pnpm …` o‘rniga `npm run …`. |
 | Seed: `… demo akkaunti bazada … roli bilan bor, seed esa … kutadi` | `.env` dagi `DEMO_*_PHONE` ni tekshiring; dev baza eski bo‘lsa `npm run dev:reset` (dev volume’lar o‘chadi), so‘ng qayta ishga tushiring. |
 | Frontend build: `Production build to‘xtatildi: VITE_DEMO_…` | Demo qiymatlar `apps/frontend/.env` da emas, `.env.development.local` da bo‘lsin. |

@@ -2,6 +2,7 @@
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'auth.register': 'Ro‘yxatdan o‘tish',
   'auth.phone.verified': 'Telefon tasdiqlandi',
+  'auth.google.linked': 'Google akkaunt ulandi',
   'auth.login.success': 'Tizimga kirish',
   'auth.login.failed': 'Kirish muvaffaqiyatsiz',
   'auth.login.locked': 'Kirish bloklandi (ko‘p urinish)',

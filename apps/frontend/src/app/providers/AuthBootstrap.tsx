@@ -2,7 +2,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { endSession, initSession, subscribeToOtherTabs } from '@/features/auth/model/session';
 import { useSessionStore } from '@/features/auth/model/session.store';
+import { installGuestMode } from '@/features/guest/guest-mode';
 import { onSessionExpired } from '@/shared/api/client';
+
+// Idempotent; before the first request, so visitors without an account see the sample farm.
+installGuestMode();
 
 /**
  * Restores the session once per page load and reacts to session loss:

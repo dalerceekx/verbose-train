@@ -16,11 +16,14 @@ export interface AdminUserDetails extends PublicUser {
   activeSessionCount?: number;
 }
 
+/** A phone (with a password), a Google email, or both. */
 export interface CreateUserInput {
-  phone: string;
+  phone?: string;
+  /** The Google account the user signs in with. */
+  email?: string;
   fullName: string;
   role: UserRole;
-  password: string;
+  password?: string;
 }
 
 /** /api/v1/admin/users (CONTRACT §5). Every staff read is audited server-side. */

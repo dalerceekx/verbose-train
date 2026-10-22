@@ -30,13 +30,42 @@ function ServerUnreachable() {
   );
 }
 
-/** Protected area: waits for session restore, then requires a signed-in user. */
-export function RequireAuth() {
-  const status = useSessionStore((state) => state.status);
+function LoginRedirect() {
   const endReason = useSessionStore((state) => state.endReason);
   const location = useLocation();
+  // After an explicit logout the next person starts at their own home
+  // page; otherwise (first visit, expired session) return to this page.
+  const returnHere = endReason !== 'logout' && endReason !== 'logged-out-elsewhere';
+  return (
+    <Navigate
+      to="/login"
+      replace
+      state={returnHere ? { from: { pathname: location.pathname, search: location.search } } : undefined}
+    />
+  );
+}
+
+/**
+ * The app shell: waits for session restore, then lets in a signed-in user
+ * or — guest mode — a visitor without an account, who browses the sample
+ * farm. A session that has just ended (expired, ended elsewhere, failed)
+ * goes to the login page instead of silently turning into the sample farm.
+ */
+export function AuthOrGuest() {
+  const status = useSessionStore((state) => state.status);
+  const endReason = useSessionStore((state) => state.endReason);
+  if (status === 'anonymous' && endReason !== null && endReason !== 'logout') return <LoginRedirect />;
+  return <RequireAuth guests />;
+}
+
+/**
+ * Protected area: waits for session restore, then requires a signed-in user
+ * (`guests`: or a guest in guest mode).
+ */
+export function RequireAuth({ guests = false }: { guests?: boolean }) {
+  const status = useSessionStore((state) => state.status);
   const queryClient = useQueryClient();
-  const me = useCurrentUser();
+  const me = useCurrentUser({ guest: guests });
 
   if (status === 'initializing') {
     return (
@@ -46,18 +75,7 @@ export function RequireAuth() {
     );
   }
   if (status === 'unreachable') return <ServerUnreachable />;
-  if (status === 'anonymous') {
-    // After an explicit logout the next person starts at their own home
-    // page; otherwise (first visit, expired session) return to this page.
-    const returnHere = endReason !== 'logout' && endReason !== 'logged-out-elsewhere';
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={returnHere ? { from: { pathname: location.pathname, search: location.search } } : undefined}
-      />
-    );
-  }
+  if (status === 'anonymous' && !guests) return <LoginRedirect />;
   if (me.isPending) {
     return (
       <FullScreen>
@@ -104,7 +122,7 @@ export function RequireRole({ allow }: { allow: (role: UserRole) => boolean }) {
 /** Login/registration pages: signed-in users go straight to their home page. */
 export function GuestOnly() {
   const status = useSessionStore((state) => state.status);
-  const me = useCurrentUser();
+  const me = useCurrentUser({ guest: false });
   const location = useLocation();
   if (status === 'initializing') {
     return (

@@ -62,13 +62,42 @@ describe('Eskiz and OTP environment validation', () => {
     },
   );
 
-  it.each([
-    { SMS_PROVIDER: 'mock' },
-    { SMS_MOCK_MODE: 'true' },
-    { SMS_ENABLED: 'false' },
-  ])('rejects disabled/mock production SMS %j', (override) => {
-    expect(() => validateEnv({ ...production, ...override })).toThrow(/SMS_/);
+  it.each([{ SMS_PROVIDER: 'mock' }, { SMS_MOCK_MODE: 'true' }])(
+    'rejects mock production SMS %j',
+    (override) => {
+      expect(() => validateEnv({ ...production, ...override })).toThrow(/SMS_/);
+    },
+  );
+
+  it('rejects production with SMS off unless Google sign-in is configured', () => {
+    expect(() => validateEnv({ ...production, SMS_ENABLED: 'false' })).toThrow(
+      /GOOGLE_CLIENT_ID/,
+    );
   });
+
+  it('accepts production with SMS off, Google sign-in and no Eskiz account', () => {
+    const env = validateEnv({
+      ...production,
+      SMS_ENABLED: 'false',
+      SMS_PROVIDER: 'mock',
+      ESKIZ_EMAIL: undefined,
+      ESKIZ_PASSWORD: undefined,
+      GOOGLE_CLIENT_ID: '1234567890-abc_DEF.apps.googleusercontent.com',
+    });
+    expect(env.SMS_ENABLED).toBe(false);
+    expect(env.GOOGLE_CLIENT_ID).toBe(
+      '1234567890-abc_DEF.apps.googleusercontent.com',
+    );
+  });
+
+  it.each(['1234567890', 'https://accounts.google.com', 'x.apps.example.com'])(
+    'rejects a malformed GOOGLE_CLIENT_ID %j',
+    (value) => {
+      expect(() =>
+        validateEnv({ ...production, GOOGLE_CLIENT_ID: value }),
+      ).toThrow(/GOOGLE_CLIENT_ID/);
+    },
+  );
 
   it('allows explicit safe mock mode without credentials in development', () => {
     expect(

@@ -39,6 +39,7 @@ import { AuthService, type SessionView } from './auth.service.js';
 import {
   ChangePasswordDto,
   ForgotPasswordDto,
+  GoogleLoginDto,
   LoginDto,
   MfaCodeDto,
   MfaTokenDto,
@@ -48,6 +49,7 @@ import {
   ResetPasswordDto,
   VerifyPhoneDto,
 } from './dto/auth.dto.js';
+import { GoogleLoginService } from './google/google-login.service.js';
 import {
   LoginService,
   type LoginOutcome,
@@ -63,6 +65,14 @@ export interface AuthenticatedBody {
   user: PublicUser;
   /** Mobile clients only. */
   refreshToken?: string;
+}
+
+/** Sign-in methods the client should offer. */
+export interface AuthMethods {
+  /** Public OAuth client ID for the Google button; null while off. */
+  google: { clientId: string } | null;
+  /** Phone registration and SMS password reset. */
+  sms: boolean;
 }
 
 export interface RefreshBody {
@@ -87,6 +97,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly loginService: LoginService,
+    private readonly googleLogin: GoogleLoginService,
     private readonly mfa: MfaService,
     private readonly sessions: SessionService,
     private readonly cookies: AuthCookies,
@@ -167,6 +178,34 @@ export class AuthController {
   ): Promise<AuthenticatedBody | MfaChallenge> {
     this.guardCookieIssuer(req);
     const outcome = await this.loginService.login(dto, requestMeta());
+    return this.respond(outcome, req, res);
+  }
+
+  @Public()
+  @Get('methods')
+  @ApiOperation({ summary: 'Yoqilgan kirish usullari (Google, SMS)' })
+  methods(): AuthMethods {
+    const clientId = this.googleLogin.clientId;
+    return {
+      google: clientId ? { clientId } : null,
+      sms: this.auth.smsEnabled,
+    };
+  }
+
+  /** Same answers as /login: a session, or the TOTP step for admin roles. */
+  @Public()
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Google akkaunti bilan kirish (ID token)' })
+  @ApiResponse({ status: 401, description: 'Google tokeni yaroqsiz.' })
+  @ApiResponse({ status: 404, description: 'Google orqali kirish o‘chiq.' })
+  async google(
+    @Body() dto: GoogleLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthenticatedBody | MfaChallenge> {
+    this.guardCookieIssuer(req);
+    const outcome = await this.googleLogin.login(dto.credential, requestMeta());
     return this.respond(outcome, req, res);
   }
 

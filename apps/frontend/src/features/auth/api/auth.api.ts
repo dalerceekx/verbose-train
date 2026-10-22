@@ -1,6 +1,13 @@
 import { CSRF_HEADER, http, readCsrfToken } from '@/shared/api/client';
 import type { PublicUser } from '@/shared/types/api';
-import type { ActiveSession, AuthenticatedResponse, LoginResponse, MfaSetupResponse, VerificationResponse } from './auth.types';
+import type {
+  ActiveSession,
+  AuthenticatedResponse,
+  AuthMethods,
+  LoginResponse,
+  MfaSetupResponse,
+  VerificationResponse,
+} from './auth.types';
 
 /**
  * /api/v1/auth — CONTRACT §4. Public endpoints use `skipAuth`, so their
@@ -9,6 +16,17 @@ import type { ActiveSession, AuthenticatedResponse, LoginResponse, MfaSetupRespo
 export const authApi = {
   async login(body: { phone: string; password: string }): Promise<LoginResponse> {
     const { data } = await http.post<LoginResponse>('/auth/login', body, { skipAuth: true });
+    return data;
+  },
+
+  async methods(): Promise<AuthMethods> {
+    const { data } = await http.get<AuthMethods>('/auth/methods', { skipAuth: true });
+    return data;
+  },
+
+  /** `credential` is the ID token the Google button returns. */
+  async google(credential: string): Promise<LoginResponse> {
+    const { data } = await http.post<LoginResponse>('/auth/google', { credential }, { skipAuth: true });
     return data;
   },
 

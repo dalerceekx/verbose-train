@@ -17,7 +17,9 @@ interface CardHeaderProps {
 
 export function CardHeader({ title, description, icon, actions, className, as: Heading = 'h2' }: CardHeaderProps) {
   return (
-    <div className={cn('flex flex-wrap items-start justify-between gap-3 border-b border-line px-5 py-4', className)}>
+    <div
+      className={cn('flex flex-wrap items-start justify-between gap-3 border-b border-line px-4 py-3 sm:px-5 sm:py-4', className)}
+    >
       <div className="flex min-w-0 items-start gap-3">
         {icon ? (
           <span
@@ -38,7 +40,7 @@ export function CardHeader({ title, description, icon, actions, className, as: H
 }
 
 export function CardBody({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('px-5 py-4', className)} {...props} />;
+  return <div className={cn('px-4 py-3 sm:px-5 sm:py-4', className)} {...props} />;
 }
 
 /** Label/value rows for details panels. */

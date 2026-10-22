@@ -13,13 +13,18 @@ describe('dev SMS inbox (NODE_ENV=development, SMS_PROVIDER=mock)', () => {
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'development';
+    // Set first: in development the config module loads the developer's
+    // .env, which never overrides variables that are already set (that
+    // .env may well say SMS_ENABLED=false).
+    process.env.SMS_ENABLED = 'true';
     try {
       testApp = await createTestApp({
         features: ['sms'],
-        env: { NODE_ENV: 'development' },
+        env: { NODE_ENV: 'development', SMS_ENABLED: 'true' },
       });
     } finally {
       process.env.NODE_ENV = 'test';
+      delete process.env.SMS_ENABLED;
     }
   });
 

@@ -26,7 +26,7 @@ function Slide({ ration, today, onConfirm }: { ration: Ration; today: string; on
   return (
     <div
       className={cn(
-        'flex h-full flex-col gap-3 rounded-[14px] border p-4',
+        'flex h-full flex-col gap-2.5 rounded-[14px] border p-3.5 sm:gap-3 sm:p-4',
         status.given ? 'border-success/30 bg-success-light/60' : 'border-line bg-background',
       )}
     >
@@ -109,7 +109,8 @@ export function TodayRations({ farm }: { farm: Farm }) {
                 icon={<ChevronLeft aria-hidden className="size-5" />}
                 disabled={active === 0}
                 onClick={() => goTo(active - 1)}
-                className="hidden size-9 sm:inline-flex"
+                className="size-9 max-sm:hidden"
+                data-guest-ok
               />
               <IconButton
                 label="Keyingi ratsion"
@@ -117,7 +118,8 @@ export function TodayRations({ farm }: { farm: Farm }) {
                 icon={<ChevronRight aria-hidden className="size-5" />}
                 disabled={active >= list.length - 1}
                 onClick={() => goTo(active + 1)}
-                className="hidden size-9 sm:inline-flex"
+                className="size-9 max-sm:hidden"
+                data-guest-ok
               />
             </>
           ) : null
@@ -127,7 +129,7 @@ export function TodayRations({ farm }: { farm: Farm }) {
         query={rations}
         collection
         loading={
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <Skeleton className="h-36" />
           </div>
         }
@@ -145,12 +147,12 @@ export function TodayRations({ farm }: { farm: Farm }) {
         }
       >
         {() => (
-          <div className="py-4">
+          <div className="py-3 sm:py-4">
             <ul
               ref={trackRef}
               aria-label="Bugungi ratsionlar"
               onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / slideWidth()))}
-              className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-5 px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-1 [scrollbar-width:none] sm:scroll-px-5 sm:px-5 [&::-webkit-scrollbar]:hidden"
             >
               {list.map((ration, index) => (
                 <li

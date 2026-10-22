@@ -404,6 +404,55 @@ function matchSegments(segments: readonly string[], path: string): Record<string
 
 // --- auth ------------------------------------------------------------------
 
+route('GET', '/auth/methods', 'public', ({ db }) => ok(db.authMethods));
+
+function requireSms(db: MockDb): void {
+  if (!db.authMethods.sms) {
+    fail(403, 'SMS_DISABLED', 'SMS orqali tasdiqlash vaqtincha o‘chirilgan. Google akkauntingiz bilan kiring');
+  }
+}
+
+// No real Google: a credential "mock-google:<email>" stands for a verified
+// ID token of that address. Same outcomes as the backend.
+route('POST', '/auth/google', 'public', ({ req, db }) => {
+  const record = readBody({ req }, ['credential']);
+  if (!db.authMethods.google) fail(404, 'NOT_FOUND', 'Google orqali kirish sozlanmagan');
+  const credential = str(record, 'credential', { required: true, max: 4096 }) ?? '';
+  const email = credential.startsWith('mock-google:') ? credential.slice('mock-google:'.length).toLowerCase() : '';
+  if (!email) fail(401, 'GOOGLE_TOKEN_INVALID', 'Google orqali kirib bo‘lmadi. Qaytadan urinib ko‘ring');
+  let user = db.users.find((candidate) => candidate.email === email);
+  if (!user) {
+    user = {
+      id: newId(),
+      phone: null,
+      email,
+      fullName: email.slice(0, email.indexOf('@')),
+      role: 'FARMER',
+      status: 'ACTIVE',
+      phoneVerifiedAt: null,
+      emailVerifiedAt: now(),
+      mfaEnabled: false,
+      isDemo: false,
+      lastLoginAt: null,
+      createdAt: now(),
+      updatedAt: now(),
+      blockedAt: null,
+      archivedAt: null,
+      password: '',
+    };
+    db.users.push(user);
+  }
+  if (user.status === 'ARCHIVED') fail(401, 'GOOGLE_TOKEN_INVALID', 'Google orqali kirib bo‘lmadi. Qaytadan urinib ko‘ring');
+  if (user.status === 'BLOCKED') fail(403, 'ACCOUNT_BLOCKED', 'Akkaunt bloklangan');
+  if (MFA_ROLES.includes(user.role)) {
+    const purpose = user.mfaEnabled ? 'challenge' : 'setup';
+    const mfaToken = token('mfa', db);
+    db.mfaTokens.push({ token: mfaToken, userId: user.id, purpose, used: false });
+    return ok({ status: user.mfaEnabled ? 'MFA_REQUIRED' : 'MFA_SETUP_REQUIRED', mfaToken, mfaTokenExpiresIn: 300 });
+  }
+  return createSession(db, user, req);
+});
+
 route('POST', '/auth/login', 'public', ({ req, db }) => {
   const record = readBody({ req }, ['phone', 'password']);
   const phone = str(record, 'phone', { required: true, max: 32 });
@@ -432,7 +481,7 @@ route('POST', '/auth/mfa/setup', 'public', ({ req, db }) => {
   const secret = newTotpSecret();
   return ok({
     secret,
-    otpauthUrl: `otpauth://totp/MeningFermam:${user.phone.slice(0, 6)}*****?secret=${secret}&issuer=MeningFermam&algorithm=SHA1&digits=6&period=30`,
+    otpauthUrl: `otpauth://totp/MeningFermam:${(user.phone ?? user.email ?? '').slice(0, 6)}*****?secret=${secret}&issuer=MeningFermam&algorithm=SHA1&digits=6&period=30`,
   });
 });
 
@@ -539,6 +588,7 @@ function issueOtp(db: MockDb, phone: string, purpose: 'PHONE_VERIFICATION' | 'PA
 }
 
 const registerHandler: PublicHandler = ({ req, db }) => {
+  requireSms(db);
   const record = readBody({ req }, ['phone', 'fullName', 'password']);
   const phone = str(record, 'phone', { required: true, max: 32 }) ?? '';
   const fullName = str(record, 'fullName', { required: true, max: 100 }) ?? '';
@@ -567,6 +617,7 @@ const registerHandler: PublicHandler = ({ req, db }) => {
       role: 'FARMER',
       status: 'PENDING_VERIFICATION',
       phoneVerifiedAt: null,
+      emailVerifiedAt: null,
       mfaEnabled: false,
       isDemo: false,
       lastLoginAt: null,
@@ -621,6 +672,7 @@ route('POST', '/auth/otp/resend', 'public', ({ req, db }) => {
 });
 
 route('POST', '/auth/password/forgot', 'public', ({ req, db }) => {
+  requireSms(db);
   const phone = str(readBody({ req }, ['phone']), 'phone', { required: true, max: 32 }) ?? '';
   const user = db.users.find((candidate) => candidate.phone === phone && candidate.status === 'ACTIVE');
   if (!user)
@@ -1544,20 +1596,30 @@ route('GET', '/admin/users/:id', STAFF_READ, (ctx) => {
 });
 
 route('POST', '/admin/users', ADMINS, (ctx) => {
-  const record = readBody(ctx, ['phone', 'fullName', 'role', 'password']);
+  const record = readBody(ctx, ['phone', 'email', 'fullName', 'role', 'password']);
   const role = oneOf(record, 'role', ['SUPER_ADMIN', 'ADMIN', 'SUPPORT', 'VET', 'FARMER'] as const, true) ?? 'FARMER';
   if (ctx.user.role === 'ADMIN' && MFA_ROLES.includes(role)) forbidden();
-  const phone = str(record, 'phone', { required: true, max: 32 }) ?? '';
-  if (!/^\+998\d{9}$/.test(phone)) invalid(['phone must be a valid Uzbek phone number']);
-  if (ctx.db.users.some((candidate) => candidate.phone === phone)) fail(409, 'CONFLICT', 'Bunday ma’lumot allaqachon mavjud');
+  // Like the backend: a phone (with password), a Google email, or both.
+  const email = str(record, 'email', { max: 254 })?.trim().toLowerCase() ?? null;
+  if (email !== null && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) invalid(['email must be an email']);
+  const phone = str(record, 'phone', { required: !email, max: 32 }) ?? null;
+  if (phone !== null && !/^\+998\d{9}$/.test(phone)) invalid(['phone must be a valid Uzbek phone number']);
+  if (phone !== null && !record.password) invalid(['password must be a string']);
+  if (phone !== null && ctx.db.users.some((candidate) => candidate.phone === phone)) {
+    fail(409, 'PHONE_TAKEN', 'Bu telefon raqami allaqachon ro‘yxatdan o‘tgan');
+  }
+  if (email !== null && ctx.db.users.some((candidate) => candidate.email === email)) {
+    fail(409, 'EMAIL_TAKEN', 'Bu email bilan foydalanuvchi allaqachon mavjud');
+  }
   const created: MockUser = {
     id: newId(),
     phone,
-    email: null,
+    email,
     fullName: str(record, 'fullName', { required: true, max: 100 }) ?? '',
     role,
     status: 'ACTIVE',
-    phoneVerifiedAt: now(),
+    phoneVerifiedAt: phone ? now() : null,
+    emailVerifiedAt: email ? now() : null,
     mfaEnabled: false,
     isDemo: ctx.user.isDemo,
     lastLoginAt: null,
@@ -1600,7 +1662,7 @@ route('POST', '/admin/users/:id/unblock', ADMINS, (ctx) => {
   const target = targetUser(ctx);
   assertCanActOn(ctx, target);
   readBody(ctx, []);
-  if (!target.phoneVerifiedAt) fail(409, 'PHONE_NOT_VERIFIED', 'Telefon tasdiqlanmagan');
+  if (!target.phoneVerifiedAt && !target.emailVerifiedAt) fail(409, 'PHONE_NOT_VERIFIED', 'Telefon tasdiqlanmagan');
   target.status = 'ACTIVE';
   target.blockedAt = null;
   audit(ctx.db, ctx.user, 'user.unblocked', 'user', target.id, { status: 'BLOCKED' }, { status: 'ACTIVE' });

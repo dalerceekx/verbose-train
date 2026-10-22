@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuditAction } from '../audit/audit-actions.js';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthUser } from '../common/auth/auth-user.js';
@@ -15,6 +16,7 @@ import {
   USER_PUBLIC_SELECT,
   type PublicUser,
 } from '../common/selects/user.select.js';
+import type { Env } from '../config/env.js';
 import {
   OtpPurpose,
   SessionRevokeReason,
@@ -34,6 +36,7 @@ import {
   otpInvalid,
   passwordContainsPhoneError,
   PASSWORD_CHANGE_LIMIT,
+  smsDisabled,
 } from './auth.constants.js';
 import type {
   ChangePasswordDto,
@@ -59,9 +62,15 @@ export interface SessionView {
   current: boolean;
 }
 
-/** Registration, phone verification, password recovery and account reads. */
+/**
+ * Registration, phone verification, password recovery and account reads.
+ * The SMS-based flows answer 403 SMS_DISABLED while SMS_ENABLED=false.
+ */
 @Injectable()
 export class AuthService {
+  /** False while SMS is off (e.g. until the provider is approved). */
+  readonly smsEnabled: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
@@ -71,7 +80,14 @@ export class AuthService {
     private readonly otp: OtpService,
     private readonly audit: AuditService,
     private readonly deferred: DeferredWork,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    this.smsEnabled = config.get('SMS_ENABLED', { infer: true });
+  }
+
+  private assertSmsEnabled(): void {
+    if (!this.smsEnabled) throw smsDisabled();
+  }
 
   /**
    * Always answers 202 with the same body. A new phone gets a FARMER account
@@ -86,6 +102,7 @@ export class AuthService {
     dto: RegisterDto,
     ip: string | undefined,
   ): Promise<VerificationResponse> {
+    this.assertSmsEnabled();
     if (passwordContainsPhone(dto.password, dto.phone)) {
       throw passwordContainsPhoneError();
     }
@@ -134,7 +151,7 @@ export class AuthService {
             });
         const otp = await this.otp.issue(
           tx,
-          user,
+          { id: user.id, phone: dto.phone },
           OtpPurpose.PHONE_VERIFICATION,
           verificationId,
         );
@@ -166,6 +183,7 @@ export class AuthService {
     dto: VerifyPhoneDto,
     ip: string | undefined,
   ): Promise<{ message: string }> {
+    this.assertSmsEnabled();
     await enforceIpLimit(this.rateLimit, IpLimits.verifyPhone, ip);
     const otp = await this.otp.check(
       dto.verificationId,
@@ -196,10 +214,11 @@ export class AuthService {
     return { message: AuthMessages.phoneVerified };
   }
 
-  resendOtp(
+  async resendOtp(
     verificationId: string,
     ip: string | undefined,
   ): Promise<VerificationResponse> {
+    this.assertSmsEnabled();
     return this.otp.resend(verificationId, ip);
   }
 
@@ -211,6 +230,7 @@ export class AuthService {
     dto: ForgotPasswordDto,
     ip: string | undefined,
   ): Promise<VerificationResponse> {
+    this.assertSmsEnabled();
     await enforceIpLimit(this.rateLimit, IpLimits.passwordForgot, ip);
     await this.otp.reserveSend(dto.phone, ip);
     await this.sms.consumeDailyQuota(dto.phone, ip);
@@ -253,7 +273,7 @@ export class AuthService {
       const otp = eligible
         ? await this.otp.issue(
             tx,
-            user,
+            { id: user.id, phone },
             OtpPurpose.PASSWORD_RESET,
             verificationId,
           )
@@ -278,6 +298,7 @@ export class AuthService {
     dto: ResetPasswordDto,
     ip: string | undefined,
   ): Promise<{ message: string }> {
+    this.assertSmsEnabled();
     await enforceIpLimit(this.rateLimit, IpLimits.passwordReset, ip);
     const otp = await this.otp.check(
       dto.verificationId,
@@ -345,7 +366,7 @@ export class AuthService {
         'INVALID_CREDENTIALS',
       );
     }
-    if (passwordContainsPhone(dto.newPassword, row.phone)) {
+    if (row.phone && passwordContainsPhone(dto.newPassword, row.phone)) {
       throw passwordContainsPhoneError();
     }
     const passwordHash = await this.passwords.hash(dto.newPassword);

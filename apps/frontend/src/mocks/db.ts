@@ -65,6 +65,8 @@ export interface MockDb {
   medicines: Medicine[];
   auditLogs: AuditLog[];
   idempotency: Record<string, { hash: string; status: number; body: unknown }>;
+  /** GET /auth/methods. Mock Google accepts credentials "mock-google:<email>". */
+  authMethods: { google: { clientId: string } | null; sms: boolean };
   /** The browser's refresh cookie, simulated: session id or null. */
   refreshCookie: string | null;
   csrfToken: string | null;
@@ -95,6 +97,7 @@ function user(role: UserRole, phone: string, fullName: string, password: string,
     role,
     status: 'ACTIVE',
     phoneVerifiedAt: daysAgo(90),
+    emailVerifiedAt: null,
     mfaEnabled: false,
     isDemo: true,
     lastLoginAt: daysAgo(1),
@@ -311,6 +314,7 @@ export function createSeedDb(): MockDb {
       },
     ],
     idempotency: {},
+    authMethods: { google: null, sms: true },
     refreshCookie: null,
     csrfToken: null,
     sequence: 1,

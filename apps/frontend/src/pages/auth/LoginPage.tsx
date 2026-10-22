@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { AuthLayout } from '@/features/auth/components/AuthLayout';
+import { GoogleSignIn } from '@/features/auth/components/GoogleSignIn';
 import { LoginForm } from '@/features/auth/components/LoginForm';
+import { useAuthMethods } from '@/features/auth/hooks/useAuthFlows';
 import { useSessionStore, type LoginNotice } from '@/features/auth/model/session.store';
 import { Alert } from '@/shared/ui';
 
@@ -16,24 +18,37 @@ export default function LoginPage() {
   const location = useLocation();
   const phone = (location.state as { phone?: string } | null)?.phone ?? '';
   // A notice is shown once: copy it on mount, then clear it from the store.
+  // The ended session has been dealt with here too: browsing on lands in
+  // guest mode instead of back on this page.
   const [notice] = useState<LoginNotice>(() => useSessionStore.getState().notice);
   useEffect(() => {
-    useSessionStore.getState().setNotice(null);
+    useSessionStore.setState({ notice: null, endReason: null });
   }, []);
 
   const noticeContent = notice ? NOTICES[notice] : null;
+  const methods = useAuthMethods();
+  // Until the server answers (or if it cannot), keep the SMS links visible:
+  // a disabled flow still explains itself with SMS_DISABLED.
+  const sms = methods.data?.sms ?? true;
+  const google = Boolean(methods.data?.google);
 
   return (
     <AuthLayout
       title="Xush kelibsiz!"
       description="Fermangizni boshqarish uchun tizimga kiring."
       footer={
-        <>
-          Hisobingiz yo‘qmi?{' '}
-          <Link to="/register" className="font-medium text-warning underline-offset-4 hover:underline">
-            Ro‘yxatdan o‘ting
-          </Link>
-        </>
+        sms ? (
+          <>
+            Hisobingiz yo‘qmi?{' '}
+            <Link to="/register" className="font-medium text-warning underline-offset-4 hover:underline">
+              Ro‘yxatdan o‘ting
+            </Link>
+          </>
+        ) : google ? (
+          'Hisobingiz yo‘qmi? Google bilan birinchi marta kirganingizda hisob avtomatik ochiladi.'
+        ) : (
+          'Hisob ochish uchun administratorga murojaat qiling.'
+        )
       }
     >
       {noticeContent ? (
@@ -41,7 +56,15 @@ export default function LoginPage() {
           {noticeContent.text}
         </Alert>
       ) : null}
-      <LoginForm defaultPhone={phone} />
+      <GoogleSignIn />
+      {google ? (
+        <div className="my-5 flex items-center gap-3 text-[13px] text-ink-secondary" role="separator">
+          <span className="h-px flex-1 bg-line" />
+          yoki telefon raqami bilan
+          <span className="h-px flex-1 bg-line" />
+        </div>
+      ) : null}
+      <LoginForm defaultPhone={phone} passwordReset={sms} />
     </AuthLayout>
   );
 }

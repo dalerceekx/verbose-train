@@ -222,7 +222,9 @@ export default function UsersPage() {
         </AsyncContent>
       </Card>
 
-      {me ? <CreateUserDialog open={creating} onClose={() => setCreating(false)} actorRole={me.role} /> : null}
+      {me ? (
+        <CreateUserDialog open={creating} onClose={() => setCreating(false)} actorRole={me.role} actorIsDemo={me.isDemo} />
+      ) : null}
     </div>
   );
 }

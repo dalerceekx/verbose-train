@@ -108,3 +108,34 @@ describe('Molim kasal — a disease shows its whole source text', () => {
     expect(await screen.findByText('Ma’lumotlarni yuklab bo‘lmadi')).toBeInTheDocument();
   });
 });
+
+describe('Molim kasal — are the treatment’s medicines in the pharmacy?', () => {
+  function addMedicine(name: string, quantity: string, expiresOn: string | null = null) {
+    const [template] = api.server.db.items;
+    if (!template) throw new Error('seed has no inventory items');
+    const id = `00000000-0000-4000-9000-${String(api.server.db.items.length).padStart(12, '0')}`;
+    api.server.db.items.push({ ...template, id, name, category: 'MEDICINE', unit: 'ML', quantity, expiresOn, archivedAt: null });
+    return id;
+  }
+
+  it('lists every medicine of the scheme with what the farm has of it', async () => {
+    const seftonit = addMedicine('Seftonit', '100.000');
+    addMedicine('Nitoks-200', '0.000');
+    addMedicine('Fluneks', '50.000', '2020-01-01');
+    renderApp('/diseases/1');
+
+    const section = await screen.findByRole('region', { name: 'Dorixonangizda bormi?' });
+    expect(await within(section).findByText('Sxemadagi 8 ta doridan 1 tasi dorixonangizda bor.')).toBeInTheDocument();
+    const row = (name: string) => within(section).getByText(name).closest('li') as HTMLElement;
+    expect(row('Seftonit')).toHaveTextContent('Bor · 100 ml');
+    expect(within(row('Seftonit')).getByRole('link', { name: 'Seftonit' })).toHaveAttribute(
+      'href',
+      `/medicines/stock/${seftonit}`,
+    );
+    expect(row('Nitoks 200')).toHaveTextContent('Tugagan');
+    expect(row('Fluneks')).toHaveTextContent('Muddati o‘tgan');
+    expect(row('Azitronit')).toHaveTextContent('Yo‘q');
+    expect(row('Yog‘li A, D3, E vitaminlar')).toHaveTextContent('Yo‘q');
+    expect(within(section).getByRole('link', { name: 'Dori omboriga o‘tish' })).toHaveAttribute('href', '/medicines');
+  });
+});

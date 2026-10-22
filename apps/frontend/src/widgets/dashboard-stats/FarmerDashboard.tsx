@@ -23,14 +23,18 @@ function QuickAction({ to, icon, label, description }: { to: string; icon: React
   return (
     <Link
       to={to}
-      className="flex min-h-[76px] items-center gap-3 rounded-[14px] border border-line bg-card px-4 py-3 shadow-card transition-colors hover:border-primary-hover hover:bg-primary-light/40"
+      className="flex min-h-14 items-center gap-2.5 rounded-[14px] border border-line bg-card px-3 py-2.5 shadow-card transition-colors hover:border-primary-hover hover:bg-primary-light/40 sm:min-h-[76px] sm:gap-3 sm:px-4 sm:py-3"
     >
-      <span aria-hidden className="inline-flex size-11 shrink-0 items-center justify-center rounded-[12px] bg-primary text-ink">
+      <span
+        aria-hidden
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-primary text-ink sm:size-11 sm:rounded-[12px]"
+      >
         {icon}
       </span>
       <span className="min-w-0">
-        <span className="block font-semibold text-ink">{label}</span>
-        <span className="block text-[13px] text-ink-secondary">{description}</span>
+        <span className="block text-sm leading-tight font-semibold text-ink sm:text-base">{label}</span>
+        {/* Two actions share a row on a phone: the label alone says enough. */}
+        <span className="hidden text-[13px] text-ink-secondary sm:block">{description}</span>
       </span>
     </Link>
   );
@@ -56,12 +60,15 @@ export function FarmerDashboard({ farm }: { farm: Farm }) {
   const firstName = user?.fullName.split(' ')[0] ?? '';
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       <p className="text-ink-secondary">
         Assalomu alaykum{firstName ? `, ${firstName}` : ''}! <span className="text-ink">{farm.name}</span> bo‘yicha bugungi holat.
       </p>
 
-      <section aria-label="Asosiy ko‘rsatkichlar" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Today's feeding is the daily task: first thing on the page. */}
+      <TodayRations farm={farm} />
+
+      <section aria-label="Asosiy ko‘rsatkichlar" className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <StatCard
           icon={<PawPrint className="size-5" />}
           label="Jami hayvonlar"
@@ -75,7 +82,7 @@ export function FarmerDashboard({ farm }: { farm: Farm }) {
         <StatCard
           icon={<Warehouse className="size-5" />}
           label="Yem zaxirasi"
-          value={<span className="text-[24px]">{formatTotals(totalsByUnit(feedItems))}</span>}
+          value={<span className="text-[17px] sm:text-[24px]">{formatTotals(totalsByUnit(feedItems))}</span>}
           secondary={`${formatInteger(feedItems.length)} turdagi yem`}
           loading={feed.isPending}
           failed={feed.isError}
@@ -84,7 +91,7 @@ export function FarmerDashboard({ farm }: { farm: Farm }) {
         <StatCard
           icon={<Wallet className="size-5" />}
           label="Oylik xarajatlar"
-          value={<span className="text-[24px]">{formatMoney(monthSpend)}</span>}
+          value={<span className="text-[17px] sm:text-[24px]">{formatMoney(monthSpend)}</span>}
           secondary="Shu oy, ombor xaridlari asosida"
           loading={ledger.isPending}
           failed={ledger.isError}
@@ -92,9 +99,7 @@ export function FarmerDashboard({ farm }: { farm: Farm }) {
         />
       </section>
 
-      <TodayRations farm={farm} />
-
-      <section aria-label="Tezkor amallar" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label="Tezkor amallar" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <QuickAction
           to="/animals?new=1"
           icon={<Plus className="size-5" />}
@@ -116,7 +121,7 @@ export function FarmerDashboard({ farm }: { farm: Farm }) {
         />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader
             title="Hayvonlar bo‘yicha qisqacha"
@@ -195,7 +200,7 @@ export function FarmerDashboard({ farm }: { farm: Farm }) {
           {ledger.isError ? (
             <ErrorState error={ledger.error} collection onRetry={() => void ledger.refetch()} />
           ) : ledger.isPending ? (
-            <div className="p-5">
+            <div className="p-4 sm:p-5">
               <Skeleton className="h-32" />
             </div>
           ) : (

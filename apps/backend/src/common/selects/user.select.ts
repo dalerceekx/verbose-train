@@ -9,6 +9,7 @@ export const USER_PUBLIC_SELECT = {
   role: true,
   status: true,
   phoneVerifiedAt: true,
+  emailVerifiedAt: true,
   mfaEnabled: true,
   isDemo: true,
   lastLoginAt: true,
@@ -28,4 +29,5 @@ export const SENSITIVE_USER_FIELDS: readonly string[] = Object.freeze([
   'mfaSecretEnc',
   'mfaPendingSecretEnc',
   'mfaLastUsedStep',
+  'googleSub',
 ]);

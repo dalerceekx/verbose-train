@@ -290,6 +290,60 @@ describe('Admin user management (/api/v1/admin/users)', () => {
       expect(res.body.role).toBe(role);
     });
 
+    it('creates a Google-only account from an email (no phone, no password)', async () => {
+      const email = `Yangi.Xodim.${Date.now()}@Gmail.com`;
+      const res = await http()
+        .post(USERS_URL)
+        .set(superAdmin.auth.authHeader)
+        .send({ email, fullName: 'Google Xodim', role: VET })
+        .expect(201);
+      expect(res.body).toMatchObject({
+        phone: null,
+        email: email.toLowerCase(),
+        role: VET,
+        status: UserStatus.ACTIVE,
+        phoneVerifiedAt: null,
+        emailVerifiedAt: expect.any(String),
+      });
+
+      const rows = await auditRowsFor(testApp.prisma, res.body.id as string);
+      expect(rows[0]).toMatchObject({
+        action: 'user.created',
+        newValue: { role: VET, phoneMasked: null },
+      });
+      expect(JSON.stringify(rows[0].newValue)).not.toContain(
+        email.toLowerCase(),
+      );
+
+      const again = await http()
+        .post(USERS_URL)
+        .set(superAdmin.auth.authHeader)
+        .send({ email: email.toUpperCase(), fullName: 'Takror', role: VET })
+        .expect(409);
+      expect(again.body.code).toBe('EMAIL_TAKEN');
+    });
+
+    it.each([
+      ['neither phone nor email', {}],
+      ['a phone without a password', { phone: 'PHONE' }],
+      ['a malformed email', { email: 'not-an-email' }],
+    ])('400 for %s', async (_name, contact: Record<string, unknown>) => {
+      const phone = await uniquePhone();
+      await http()
+        .post(USERS_URL)
+        .set(superAdmin.auth.authHeader)
+        .send({
+          fullName: 'Xodim',
+          role: VET,
+          ...contact,
+          ...(contact.phone ? { phone } : {}),
+        })
+        .expect(400);
+      expect(
+        await testApp.prisma.user.findUnique({ where: { phone } }),
+      ).toBeNull();
+    });
+
     it('409 PHONE_TAKEN for an existing phone', async () => {
       const { user: existing } = await createUser(testApp.prisma);
       const res = await http()

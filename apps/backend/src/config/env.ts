@@ -173,6 +173,17 @@ const envSchema = z
     SMS_DAILY_LIMIT_PER_IP: z.coerce.number().int().positive().default(50),
     SMS_MAX_SEND_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
 
+    // --- Google sign-in ---------------------------------------------------
+    // OAuth 2.0 "Web application" client ID (Google Cloud Console). Public:
+    // the browser receives it. While unset, Google sign-in is off (404).
+    GOOGLE_CLIENT_ID: z
+      .string()
+      .regex(
+        /^[\w-]+\.apps\.googleusercontent\.com$/,
+        'Google OAuth Client ID (…apps.googleusercontent.com) bo‘lsin',
+      )
+      .optional(),
+
     // --- File storage -------------------------------------------------------
     // `s3` = private bucket; `local` = private directory on the server
     // (development, tests and the single-server deploy until S3 is added).
@@ -345,11 +356,16 @@ const envSchema = z
             'Development shifrlash kaliti production’da taqiqlangan',
           );
       }
-      if (!env.SMS_ENABLED)
-        fail('SMS_ENABLED', 'Production muhitida SMS yoqilgan bo‘lsin');
+      // SMS may stay off (until the provider is approved); Google is then
+      // the only way to sign up, so it must be configured.
+      if (!env.SMS_ENABLED && !env.GOOGLE_CLIENT_ID)
+        fail(
+          'GOOGLE_CLIENT_ID',
+          'SMS o‘chirilgan bo‘lsa, Google orqali kirish sozlanishi shart',
+        );
       if (env.SMS_MOCK_MODE)
         fail('SMS_MOCK_MODE', 'Production muhitida mock SMS taqiqlangan');
-      if (env.SMS_PROVIDER === 'mock') {
+      if (env.SMS_ENABLED && env.SMS_PROVIDER === 'mock') {
         fail('SMS_PROVIDER', 'Production muhitida mock SMS ishlatib bo‘lmaydi');
       }
       if (env.DEMO_ACCOUNTS_ENABLED) {

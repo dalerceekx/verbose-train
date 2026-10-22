@@ -17,6 +17,14 @@ export interface MfaChallengeResponse {
 
 export type LoginResponse = AuthenticatedResponse | MfaChallengeResponse;
 
+/** GET /auth/methods: what the sign-in screens offer. */
+export interface AuthMethods {
+  /** Public OAuth client ID for the Google button; null while off. */
+  google: { clientId: string } | null;
+  /** Phone registration and SMS password reset. */
+  sms: boolean;
+}
+
 export interface MfaSetupResponse {
   /** Base32 TOTP secret for manual entry. */
   secret: string;

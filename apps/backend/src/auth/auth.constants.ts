@@ -15,6 +15,13 @@ export const AuthMessages = {
   mfaInvalid: 'Tasdiqlash kodi noto‘g‘ri',
   csrfFailed: 'So‘rov tasdiqlanmadi. Sahifani yangilab qayta urinib ko‘ring',
   passwordContainsPhone: 'Parol telefon raqamidan iborat bo‘lmasin',
+  smsDisabled:
+    'SMS orqali tasdiqlash vaqtincha o‘chirilgan. Google akkauntingiz bilan kiring',
+  googleDisabled: 'Google orqali kirish sozlanmagan',
+  googleInvalid: 'Google orqali kirib bo‘lmadi. Qaytadan urinib ko‘ring',
+  googleEmailUnverified: 'Google akkauntingizdagi email tasdiqlanmagan',
+  googleAccountMismatch:
+    'Bu email boshqa Google akkauntiga bog‘langan. Administratorga murojaat qiling',
 } as const;
 
 export const otpInvalid = () =>
@@ -29,6 +36,10 @@ export const mfaInvalid = () =>
 export const passwordContainsPhoneError = () =>
   Errors.badRequest('PASSWORD_WEAK', AuthMessages.passwordContainsPhone);
 
+/** SMS-based flows (register, phone verification, password reset) while SMS is off. */
+export const smsDisabled = () =>
+  Errors.forbidden(AuthMessages.smsDisabled, 'SMS_DISABLED');
+
 /** Per-IP limits of the anonymous endpoints (login uses env settings). */
 export const IpLimits = {
   register: { name: 'register', limit: 10, windowSeconds: 3600 },
@@ -36,6 +47,7 @@ export const IpLimits = {
   otpResend: { name: 'otp-resend', limit: 20, windowSeconds: 3600 },
   passwordForgot: { name: 'password-forgot', limit: 10, windowSeconds: 3600 },
   passwordReset: { name: 'password-reset', limit: 30, windowSeconds: 900 },
+  google: { name: 'google', limit: 30, windowSeconds: 900 },
 } as const;
 
 export type IpLimit = (typeof IpLimits)[keyof typeof IpLimits];

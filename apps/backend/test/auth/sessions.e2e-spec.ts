@@ -374,6 +374,7 @@ describe('Auth: refresh, logout, sessions, me', () => {
           'blockedAt',
           'createdAt',
           'email',
+          'emailVerifiedAt',
           'fullName',
           'id',
           'isDemo',

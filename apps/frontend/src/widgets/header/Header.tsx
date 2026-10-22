@@ -1,6 +1,7 @@
 import { useMatches } from 'react-router';
 import { FarmSwitcher } from '@/features/farms/components/FarmSwitcher';
 import { useActiveFarm } from '@/features/farms/model/active-farm';
+import { GuestSignInLink } from '@/features/guest/GuestShell';
 import { initials } from '@/shared/lib/format';
 import type { PublicUser } from '@/shared/types/api';
 import { BrandMark } from '@/shared/ui/BrandMark';
@@ -46,8 +47,11 @@ function FarmBrand() {
   );
 }
 
-/** Top bar: brand on the left, profile on the right. Navigation lives in the tab bar. */
-export function Header({ user }: { user: PublicUser }) {
+/**
+ * Top bar: brand on the left, profile on the right (a guest gets the sign-in
+ * link there). Navigation lives in the tab bar.
+ */
+export function Header({ user, guest = false }: { user: PublicUser; guest?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-background/92 backdrop-blur-[6px]">
       <div className="mx-auto flex min-h-16 w-full max-w-[1240px] items-center gap-3 px-4 py-3 sm:px-6 lg:px-7">
@@ -58,7 +62,7 @@ export function Header({ user }: { user: PublicUser }) {
           </span>
         ) : null}
         <div className="flex-1" />
-        <ProfileMenu user={user} />
+        {guest ? <GuestSignInLink /> : <ProfileMenu user={user} />}
       </div>
     </header>
   );

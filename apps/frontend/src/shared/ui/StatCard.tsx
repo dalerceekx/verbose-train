@@ -40,21 +40,25 @@ export function StatCard({ icon, label, value, secondary, loading, unavailable, 
     </div>
   ) : (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <span aria-hidden className="inline-flex size-11 items-center justify-center rounded-[12px] bg-primary-light text-ink">
+      {/* Smaller on a phone, where two cards share a row. */}
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <span
+          aria-hidden
+          className="inline-flex size-9 items-center justify-center rounded-[10px] bg-primary-light text-ink sm:size-11 sm:rounded-[12px] [&_svg]:size-[18px] sm:[&_svg]:size-5"
+        >
           {icon}
         </span>
         {unavailable ? <Badge tone="warning">Tez orada</Badge> : null}
       </div>
-      <p className="mt-4 text-sm font-medium text-ink-secondary">{label}</p>
-      <div className="mt-1 text-[28px] leading-tight font-semibold text-ink tabular">{shown}</div>
-      <div className="mt-1 min-h-5 text-[13px] text-ink-secondary">{note}</div>
+      <p className="mt-2.5 text-[13px] leading-tight font-medium text-ink-secondary sm:mt-4 sm:text-sm">{label}</p>
+      <div className="mt-1 text-[22px] leading-tight font-semibold break-words text-ink tabular sm:text-[28px]">{shown}</div>
+      <div className="mt-1 text-[12px] leading-snug text-ink-secondary sm:min-h-5 sm:text-[13px]">{note}</div>
     </>
   );
 
   const className = cn(
     'block min-w-0 rounded-[14px] border border-line bg-card shadow-card',
-    compact ? 'px-3 py-2.5' : 'p-5',
+    compact ? 'px-3 py-2.5' : 'p-3.5 sm:p-5',
     to && 'transition-colors hover:border-primary-hover',
   );
   return to ? (

@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { Outlet } from 'react-router';
 import { useCurrentUser } from '@/features/auth/hooks/useCurrentUser';
+import { useSessionStore } from '@/features/auth/model/session.store';
+import { GuestActionGuard, GuestNotice } from '@/features/guest/GuestShell';
 import { env } from '@/shared/config/env';
 import { Alert } from '@/shared/ui';
 import { Header, useRouteHandle } from '@/widgets/header/Header';
@@ -28,9 +30,11 @@ function PageHead() {
 /** Top bar, centred content and the floating tab bar (the same on every screen width). */
 export function AppLayout() {
   const { data: user } = useCurrentUser();
+  // Guest mode: the sample farm's user, browsing without an account.
+  const guest = useSessionStore((state) => state.status === 'anonymous');
   useDocumentTitle();
 
-  // RequireAuth guarantees the user before this layout renders.
+  // AuthOrGuest guarantees the user (or the guest) before this layout renders.
   if (!user) return null;
 
   return (
@@ -41,7 +45,8 @@ export function AppLayout() {
       >
         Asosiy mazmunga o‘tish
       </a>
-      <Header user={user} />
+      {guest ? <GuestActionGuard /> : null}
+      <Header user={user} guest={guest} />
       <main
         id="main-content"
         tabIndex={-1}
@@ -52,7 +57,9 @@ export function AppLayout() {
             Ma’lumotlar brauzer ichidagi soxta serverdan olinmoqda va backend’ga yuborilmaydi.
           </Alert>
         ) : null}
-        {user.isDemo ? (
+        {guest ? (
+          <GuestNotice />
+        ) : user.isDemo ? (
           <Alert tone="info" className="mb-6">
             Siz demo akkaunt bilan ishlayapsiz. Bu ma’lumotlar faqat sinov uchun.
           </Alert>

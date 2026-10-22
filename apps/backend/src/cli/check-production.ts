@@ -7,6 +7,8 @@ const raw = process.env;
 const UPLOADS_VOLUME = '/data/uploads';
 // Empty counts as unset, as in validateEnv (default: s3).
 const s3 = (raw.STORAGE_DRIVER || 's3') === 's3';
+// SMS may stay off until the provider is approved (Google sign-in only).
+const sms = (raw.SMS_ENABLED || 'true') === 'true';
 try {
   const env = validateEnv(raw);
   if (env.NODE_ENV !== 'production') failures.add('NODE_ENV');
@@ -25,7 +27,8 @@ try {
     // Anywhere else the files would vanish with the container.
     failures.add(`UPLOAD_LOCAL_DIR (${UPLOADS_VOLUME})`);
   }
-  if (env.SMS_PROVIDER !== 'eskiz') failures.add('SMS_PROVIDER');
+  if (sms && env.SMS_PROVIDER !== 'eskiz') failures.add('SMS_PROVIDER');
+  if (!sms && !env.GOOGLE_CLIENT_ID) failures.add('GOOGLE_CLIENT_ID');
   const db = new URL(env.DATABASE_URL);
   if (
     !['postgres:', 'postgresql:'].includes(db.protocol) ||
@@ -47,8 +50,7 @@ try {
 }
 for (const key of [
   ...(s3 ? ['S3_BUCKET', 'S3_REGION'] : []),
-  'ESKIZ_EMAIL',
-  'ESKIZ_PASSWORD',
+  ...(sms ? ['ESKIZ_EMAIL', 'ESKIZ_PASSWORD'] : []),
 ]) {
   if (!raw[key] || /^(CHANGE|REPLACE|TODO|your[-_])/i.test(raw[key] ?? ''))
     failures.add(key);
@@ -72,6 +74,6 @@ if (failures.size) {
   process.exitCode = 1;
 } else {
   process.stdout.write(
-    'Production configuration OK (offline). AWS access, DNS and SMS delivery still need live verification.\n',
+    `Production configuration OK (offline). AWS access, DNS and ${sms ? 'SMS delivery' : 'Google sign-in'} still need live verification.\n`,
   );
 }

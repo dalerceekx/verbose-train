@@ -4,6 +4,7 @@ import { Alert, AsyncContent, Badge, ButtonLink, Card, CardBody, CardHeader } fr
 import type { DiseaseDetails as Disease } from '../api/diseases.api';
 import { ANIMAL_LABELS, SAFETY_NOTICE, SOURCE_STATUS_LABEL } from '../lib/labels';
 import { useDisease } from '../model/diseases.queries';
+import { TreatmentStock } from './TreatmentStock';
 
 const SYMPTOMS_LABEL = /^Xalq tilida belgilari:\s*/;
 /** "Dori nomi: …" — the part before the first colon is set in bold; the text stays the same. */
@@ -87,6 +88,7 @@ export function DiseaseDetails({ number }: { number: number }) {
                 ))}
               </div>
               <DiseaseLines lines={data.lines.slice(1)} />
+              <TreatmentStock lines={data.lines} />
               <section aria-label="Qisqartmalar" className="rounded-[12px] border border-line p-3.5 text-sm">
                 <h3 className="font-semibold text-ink">Qisqartmalar</h3>
                 <p className="mt-1 text-ink-secondary">{data.abbreviations}</p>

@@ -71,6 +71,15 @@ export class LoginDto {
   password: string;
 }
 
+/** The ID token ("credential") the Google Identity Services button returns. */
+export class GoogleLoginDto {
+  @ApiProperty()
+  @IsString()
+  @MaxLength(MAX_TOKEN_LENGTH)
+  @IsJWT()
+  credential: string;
+}
+
 export class MfaTokenDto {
   @ApiProperty()
   @IsString()
